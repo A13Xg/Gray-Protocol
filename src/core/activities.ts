@@ -1,7 +1,7 @@
 import Decimal from "break_eternity.js";
 import type { ActivityDefinition, ActivityState, GameState, ResourceDelta, ResourceKey } from "./types";
 import { GAME_CONFIG } from "./config";
-import { canAccessReputationGate } from "./reputation";
+import { applyReputationEffects, canAccessReputationGate } from "./reputation";
 import { applyMultiplier, scaleExponential, scaleLinear } from "./math";
 import { applyResourceCost, canAffordResources, createEmptyResourceMap } from "./resources";
 import { getResearchReputationMultipliers, getResearchResourceYieldMultipliers, isActivityUnlockedByResearch } from "./research";
@@ -229,9 +229,9 @@ export function purchaseActivityLevel(state: GameState, activityId: string): boo
 export function calculateActivityYield(
   state: GameState,
   activityId: string,
-  deltaSeconds: Decimal,
-  researchMultipliers: Record<string, Decimal>,
-  computeEfficiencyMultiplier: Decimal
+  deltaSeconds = new Decimal(1),
+  activityYieldMultipliers: Record<string, Decimal> = {},
+  computeEfficiencyMultiplier = new Decimal(1)
 ): Partial<Record<ResourceKey, Decimal>> {
   const activity = getActivityState(state, activityId);
   const def = getActivityDefinition(activityId);
@@ -246,7 +246,7 @@ export function calculateActivityYield(
   const computeMultiplier = def.usesComputeAllocation
     ? Decimal.max(new Decimal(0), allocatedCompute.mul(computeEfficiencyMultiplier).add(1))
     : new Decimal(1);
-  const researchMultiplier = researchMultipliers[activityId] ?? new Decimal(1);
+  const activityYieldMultiplier = activityYieldMultipliers[activityId] ?? new Decimal(1);
   const researchResourceMultipliers = getResearchResourceYieldMultipliers(state);
   const reputationMultipliers = getResearchReputationMultipliers(state);
 
@@ -256,10 +256,12 @@ export function calculateActivityYield(
     let perSecond = applyMultiplier(
       applyMultiplier(
         applyMultiplier(applyMultiplier(baseRate, levelMultiplier), computeMultiplier),
-        researchMultiplier
+        activityYieldMultiplier
       ),
       resourceMultiplier
     );
+
+    perSecond = applyReputationEffects(state, perSecond, def.path);
 
     // Direction-sensitive reputation scaling: gains and losses are modified separately.
     if (key === "reputation") {
@@ -270,7 +272,15 @@ export function calculateActivityYield(
       }
     }
 
-    yields[key] = perSecond.mul(deltaSeconds);
+    let delta = perSecond.mul(deltaSeconds);
+    if (!delta.isFinite() || Decimal.isNaN(delta)) {
+      delta = new Decimal(0);
+    }
+    if (key !== "reputation" && delta.lt(0)) {
+      delta = new Decimal(0);
+    }
+
+    yields[key] = delta;
   }
 
   return yields;

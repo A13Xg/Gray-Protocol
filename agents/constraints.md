@@ -3,10 +3,13 @@
 - Runtime game-scale math must use `Decimal` from break_eternity.js.
 - Serialized numeric storage must use scientific-notation strings (or `"0"`).
 - Canonical resource keys are fixed: `money`, `crypto`, `compute`, `reputation`.
+- Resource/reputation calculations must avoid NaN/non-finite propagation.
+- Non-reputation resource yields should not go negative unless explicitly modeled as a cost stream.
 - Balance values belong in `src/core/config.ts`, not logic modules.
 - Core engine modules must remain headless (no DOM/Vue dependencies inside core logic functions).
 - `tick` must not perform persistence side effects.
 - Engine behavior must remain deterministic for identical state + `deltaMs` inputs.
+- Manual action reward projection and runtime application must use shared helper paths to keep display/runtime consistent.
 - Activity and upgrade systems must remain config-driven.
 - Research tree definitions and progression must remain config-driven.
 - Upgrade state is level-based: `state.upgrades.levelsById` (integers, bounded by definition max level).

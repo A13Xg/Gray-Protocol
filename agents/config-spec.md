@@ -44,6 +44,7 @@ Current baseline has 9 activities across shared/whitehat/blackhat paths.
 2. Keep action balance in config only (costs, rewards, variance, success chance, scaling).
 3. Wire into `ACTION_DEFINITIONS` in `src/core/actions.ts`.
 4. Keep execution deterministic for stochastic outcomes.
+5. UI cost/reward display must read from `ACTION_DEFINITIONS` and runtime projection helpers, not duplicated constants.
 
 ## Adding Tasks
 
@@ -86,3 +87,4 @@ Research nodes support:
 - Costs, yields, rates, gates, thresholds, reward amounts, and caps belong in config.
 - Logic modules should consume config values, not define balance constants inline.
 - Upgrade values, scaling, and effect strengths also belong in config.
+- Displayed cost/reward/multiplier information should be derived from config-backed definitions and shared runtime helper functions.

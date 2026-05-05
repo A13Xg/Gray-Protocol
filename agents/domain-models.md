@@ -82,6 +82,15 @@
 
 Only effect types wired into gameplay this layer: `activityYieldMultiplier`, `computeEfficiencyMultiplier`.
 
+## Runtime Reputation/Reward Helper Contracts
+
+- `calculateActionReward(state, actionId)` returns projected action rewards using the same deterministic reward math as runtime outcome resolution.
+- `getReputationActionMultiplier(state, actionDefinition)` returns path-aware action multiplier from current reputation alignment/value.
+- `applyActionReputationDelta(state, actionDefinition)` applies action reputation deltas and research gain/loss modifiers.
+- `calculateActivityYield(state, activityId, deltaSeconds?, activityYieldMultipliers?, computeEfficiencyMultiplier?)` supports deterministic runtime and display projections.
+- `applyUpgradeEffectsToYield(state, activityId, baseYield?)` and `applyResearchEffectsToYield(state, activityId, baseYield)` are state-first helper APIs.
+- `applyReputationEffects(state, value, path)` applies multiplicative path-aware reputation scaling for both actions and activities.
+
 ## PrestigeLayer
 
 `PrestigeLayerDefinition` supports:

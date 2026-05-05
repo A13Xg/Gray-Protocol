@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import Decimal from "break_eternity.js";
 import { state } from "./core/state";
 import {
+  getAvailableCompute,
   getComputeAllocationForActivity,
   getTotalAllocatedCompute,
   setComputeAllocation,
@@ -15,7 +16,13 @@ import { ACTIVITY_DEFINITIONS, canUnlockActivity, purchaseActivityLevel } from "
 import { UPGRADE_DEFINITIONS, canPurchaseUpgrade, getUpgradeCost, getUpgradeLevel, purchaseUpgrade } from "./core/upgrades";
 import { canResearchNode, purchaseResearchNode, RESEARCH_DEFINITIONS } from "./core/research";
 import { validateGameState } from "./core/validation";
-import { ACTION_DEFINITIONS, canExecuteAction, executeAction } from "./core/actions";
+import {
+  ACTION_DEFINITIONS,
+  calculateActionReward,
+  canExecuteAction,
+  executeAction,
+  getReputationActionMultiplier,
+} from "./core/actions";
 import {
   canClaimTask,
   claimTask,
@@ -111,6 +118,16 @@ function upgradeCostLabel(upgradeId: string): string {
   return parts.length > 0 ? parts.join(" | ") : "No cost";
 }
 
+function formatResourceMap(values: Partial<Record<string, Decimal>>): string {
+  const parts: string[] = [];
+  for (const [resource, amount] of Object.entries(values)) {
+    const decimalAmount = amount as Decimal;
+    if (decimalAmount.eq(0)) continue;
+    parts.push(`${resource}: ${format(decimalAmount)}`);
+  }
+  return parts.length > 0 ? parts.join(" | ") : "None";
+}
+
 function upgradeStatusLabel(upgradeId: string): string {
   const level = getUpgradeLevel(state, upgradeId);
   const def = UPGRADE_DEFINITIONS[upgradeId];
@@ -158,6 +175,53 @@ function canRunAction(actionId: string): boolean {
   return canExecuteAction(state, actionId);
 }
 
+function actionBaseCostLabel(actionId: string): string {
+  return formatResourceMap(ACTION_DEFINITIONS[actionId].baseCost as Partial<Record<string, Decimal>>);
+}
+
+function actionBaseRewardLabel(actionId: string): string {
+  return formatResourceMap(ACTION_DEFINITIONS[actionId].baseReward as Partial<Record<string, Decimal>>);
+}
+
+function actionRewardNowLabel(actionId: string): string {
+  const projected = calculateActionReward(state, actionId);
+  return formatResourceMap(projected as Partial<Record<string, Decimal>>);
+}
+
+function actionDurationLabel(actionId: string): string {
+  const def = ACTION_DEFINITIONS[actionId];
+  if (def.type !== "duration") return "Instant";
+  const durationMs = def.durationMs ?? 0;
+  return `${(durationMs / 1000).toFixed(1)}s`;
+}
+
+function actionReputationEffectLabel(actionId: string): string {
+  const rep = ACTION_DEFINITIONS[actionId].reputationEffect;
+  return `${rep.gte(0) ? "+" : ""}${format(rep, 3)} REP`;
+}
+
+function actionReputationMultiplierLabel(actionId: string): string {
+  const def = ACTION_DEFINITIONS[actionId];
+  return `${format(getReputationActionMultiplier(state, def), 3)}x`;
+}
+
+function actionComputeLabel(actionId: string): string {
+  const def = ACTION_DEFINITIONS[actionId];
+  const cost = def.baseCost.compute ?? new Decimal(0);
+  const freeCompute = getAvailableCompute(state);
+  return `cost: ${format(cost)} | free: ${format(freeCompute)}`;
+}
+
+function actionDisabledReason(actionId: string): string {
+  if (canRunAction(actionId)) return "Ready";
+  const def = ACTION_DEFINITIONS[actionId];
+  const computeCost = def.baseCost.compute ?? new Decimal(0);
+  if (computeCost.gt(0) && getAvailableCompute(state).lt(computeCost)) {
+    return "Insufficient free compute";
+  }
+  return "Insufficient resources or cooldown";
+}
+
 function runAction(actionId: string): void {
   const outcome = executeAction(state, actionId);
   if (!outcome) {
@@ -167,7 +231,8 @@ function runAction(actionId: string): void {
   const rewardSummary = Object.entries(outcome.appliedReward)
     .map(([resource, amount]) => `${resource}+${format(amount as Decimal)}`)
     .join(", ");
-  lastActionOutcome.value = `${actionId}: ${outcome.success ? "success" : "fail"} | ${rewardSummary || "no reward"}`;
+  const rep = `${outcome.reputationDelta.gte(0) ? "+" : ""}${format(outcome.reputationDelta, 3)} REP`;
+  lastActionOutcome.value = `${actionId}: ${outcome.success ? "success" : "fail"} | ${rewardSummary || "no reward"} | rep ${rep}`;
 }
 
 function isClaimable(taskId: string): boolean {
@@ -266,6 +331,7 @@ function forceDeleteData(): void {
           >Buy</button>
         </div>
         <div class="upgrade-cost">Cost: {{ upgradeCostLabel(upgradeId) }}</div>
+        <div class="upgrade-meta">Effects: {{ UPGRADE_DEFINITIONS[upgradeId].effects.map((effect) => `${effect.type} x${format(effect.value)}`).join(" | ") }}</div>
         <div class="upgrade-meta">{{ upgradeMetaLabel(upgradeId) }}</div>
       </div>
     </section>
@@ -295,6 +361,14 @@ function forceDeleteData(): void {
           <span class="action-count">x{{ state.manualActions.executedById[actionId] ?? 0 }}</span>
           <button :disabled="!canRunAction(actionId)" @click="runAction(actionId)">Execute</button>
         </div>
+        <div class="action-details">Cost: {{ actionBaseCostLabel(actionId) }}</div>
+        <div class="action-details">Base reward: {{ actionBaseRewardLabel(actionId) }}</div>
+        <div class="action-details">Projected reward now: {{ actionRewardNowLabel(actionId) }}</div>
+        <div class="action-details">Duration: {{ actionDurationLabel(actionId) }}</div>
+        <div class="action-details">Reputation effect: {{ actionReputationEffectLabel(actionId) }}</div>
+        <div class="action-details">Reputation multiplier: {{ actionReputationMultiplierLabel(actionId) }}</div>
+        <div class="action-details">Compute: {{ actionComputeLabel(actionId) }}</div>
+        <div class="action-details">Status: {{ actionDisabledReason(actionId) }}</div>
       </div>
       <div class="muted" v-if="lastActionOutcome">{{ lastActionOutcome }}</div>
     </section>
@@ -516,6 +590,12 @@ button {
 .task-progress {
   opacity: 0.7;
   font-size: 11px;
+}
+
+.action-details {
+  opacity: 0.8;
+  font-size: 11px;
+  margin-top: 3px;
 }
 
 button:disabled {

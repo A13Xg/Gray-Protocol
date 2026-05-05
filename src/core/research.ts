@@ -224,10 +224,11 @@ export function isUpgradeUnlockedByResearch(state: GameState, upgradeId: string)
 }
 
 export function applyResearchEffectsToYield(
-  baseYield: Decimal,
+  state: GameState,
   activityId: string,
-  state: GameState
+  baseYield: Decimal
 ): Decimal {
+  if (!baseYield.isFinite() || Decimal.isNaN(baseYield)) return new Decimal(0);
   const multipliers = getResearchActivityYieldMultipliers(state);
   const activityMultiplier = multipliers[activityId] ?? new Decimal(1);
   return baseYield.mul(activityMultiplier);

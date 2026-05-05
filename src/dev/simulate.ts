@@ -33,7 +33,7 @@ import {
   purchaseUpgrade,
   UPGRADE_DEFINITIONS,
 } from "../core/upgrades";
-import { canExecuteAction, executeAction } from "../core/actions";
+import { ACTION_DEFINITIONS, calculateActionReward, canExecuteAction, executeAction } from "../core/actions";
 import {
   canClaimTask,
   claimTask,
@@ -45,6 +45,41 @@ import {
 
 function log(label: string, value: unknown): void {
   console.log(`[sim] ${label}:`, value);
+}
+
+function resourceSnapshot(gs: ReturnType<typeof createInitialGameState>): Record<string, string> {
+  return {
+    money: gs.resources.money.toString(),
+    crypto: gs.resources.crypto.toString(),
+    compute: gs.resources.compute.toString(),
+    reputation: gs.resources.reputation.toString(),
+  };
+}
+
+function resourceSnapshotDecimal(gs: ReturnType<typeof createInitialGameState>): {
+  money: Decimal;
+  crypto: Decimal;
+  compute: Decimal;
+  reputation: Decimal;
+} {
+  return {
+    money: new Decimal(gs.resources.money),
+    crypto: new Decimal(gs.resources.crypto),
+    compute: new Decimal(gs.resources.compute),
+    reputation: new Decimal(gs.resources.reputation),
+  };
+}
+
+function resourceDelta(
+  before: { money: Decimal; crypto: Decimal; compute: Decimal; reputation: Decimal },
+  after: { money: Decimal; crypto: Decimal; compute: Decimal; reputation: Decimal }
+): Record<string, string> {
+  return {
+    money: after.money.sub(before.money).toString(),
+    crypto: after.crypto.sub(before.crypto).toString(),
+    compute: after.compute.sub(before.compute).toString(),
+    reputation: after.reputation.sub(before.reputation).toString(),
+  };
 }
 
 export function runSimulation(): void {
@@ -69,12 +104,20 @@ export function runSimulation(): void {
   }
 
   const gs = createInitialGameState();
-  log("Fresh canonical resources", {
-    money: gs.resources.money.toString(),
-    crypto: gs.resources.crypto.toString(),
-    compute: gs.resources.compute.toString(),
-    reputation: gs.resources.reputation.toString(),
-  });
+  log("Fresh canonical resources", resourceSnapshot(gs));
+
+  const starterActions = ["scanNetwork", "mineLocally", "bugBounty", "passwordAttempt"] as const;
+  for (const actionId of starterActions) {
+    const actionDef = ACTION_DEFINITIONS[actionId];
+    const projected = calculateActionReward(gs, actionId);
+    log(`Action config check (${actionId})`, {
+      cost: Object.fromEntries(Object.entries(actionDef.baseCost).map(([k, v]) => [k, v.toString()])),
+      baseReward: Object.fromEntries(Object.entries(actionDef.baseReward).map(([k, v]) => [k, v.toString()])),
+      projectedReward: Object.fromEntries(Object.entries(projected).map(([k, v]) => [k, v?.toString() ?? "0"])),
+      durationMs: actionDef.durationMs ?? 0,
+      reputationEffect: actionDef.reputationEffect.toString(),
+    });
+  }
 
   // Unlock and buy a level in accessible activities.
   const startableActivities = ["basicCryptoMining", "computeLeasing", "dataIndexing", "bugBountyHunting", "defensiveAudit", "passwordCracking", "botnetExpansion"];
@@ -106,6 +149,25 @@ export function runSimulation(): void {
       : null
   );
 
+  const repeatedActionRuns = 4;
+  for (const actionId of starterActions) {
+    for (let i = 0; i < repeatedActionRuns; i++) {
+      const before = resourceSnapshotDecimal(gs);
+      const projected = calculateActionReward(gs, actionId);
+      const outcome = executeAction(gs, actionId);
+      const after = resourceSnapshotDecimal(gs);
+      log(`Action repetition ${actionId} #${i + 1}`, {
+        executed: outcome !== null,
+        projectedReward: Object.fromEntries(Object.entries(projected).map(([k, v]) => [k, v?.toString() ?? "0"])),
+        appliedReward: outcome
+          ? Object.fromEntries(Object.entries(outcome.appliedReward).map(([k, v]) => [k, v?.toString() ?? "0"]))
+          : {},
+        reputationDelta: outcome?.reputationDelta.toString() ?? "0",
+        resourceDelta: resourceDelta(before, after),
+      });
+    }
+  }
+
   for (let i = 0; i < 10; i++) {
     executeAction(gs, "scanNetwork");
     executeAction(gs, "bugBounty");
@@ -121,6 +183,10 @@ export function runSimulation(): void {
     cracking: getComputeAllocationForActivity(gs, "passwordCracking").toString(),
   });
 
+  setComputeAllocation(gs, "basicCryptoMining", gs.resources.compute);
+  log("Can execute passwordAttempt at 0 free compute", canExecuteAction(gs, "passwordAttempt"));
+  setComputeAllocation(gs, "basicCryptoMining", new Decimal(5));
+
   tick(gs, 10_000);
   log("After 10s activity tick", {
     money: gs.resources.money.toString(),
@@ -130,6 +196,20 @@ export function runSimulation(): void {
     alignment: getReputationAlignment(gs.resources.reputation),
   });
   log("Reputation alignment after blackhat activity", getReputationAlignment(gs.resources.reputation));
+
+  const beforeComputeScale = gs.resources.crypto;
+  setComputeAllocation(gs, "basicCryptoMining", new Decimal(1));
+  tick(gs, 5_000);
+  const lowAllocationGain = gs.resources.crypto.sub(beforeComputeScale);
+  setComputeAllocation(gs, "basicCryptoMining", new Decimal(6));
+  const beforeHighAllocation = gs.resources.crypto;
+  tick(gs, 5_000);
+  const highAllocationGain = gs.resources.crypto.sub(beforeHighAllocation);
+  log("Compute scaling validation (basicCryptoMining)", {
+    lowAllocationGain: lowAllocationGain.toString(),
+    highAllocationGain: highAllocationGain.toString(),
+    higherAllocationImprovesYield: highAllocationGain.gt(lowAllocationGain),
+  });
 
   gs.resources.money = gs.resources.money.add(new Decimal(1_000));
   gs.resources.compute = gs.resources.compute.add(new Decimal(1_000));

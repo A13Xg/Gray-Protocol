@@ -337,7 +337,12 @@ export function getUpgradeEffectsForActivity(state: GameState, activityId: strin
   );
 }
 
-export function applyUpgradeEffectsToYield(state: GameState, activityId: string, baseYield: Decimal): Decimal {
+export function applyUpgradeEffectsToYield(
+  state: GameState,
+  activityId: string,
+  baseYield = new Decimal(1)
+): Decimal {
+  if (!baseYield.isFinite() || Decimal.isNaN(baseYield)) return new Decimal(0);
   const activityMult = getUpgradeYieldMultipliers(state)[activityId] ?? new Decimal(1);
   return baseYield.mul(activityMult);
 }

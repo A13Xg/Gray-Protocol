@@ -69,7 +69,9 @@ Deploy steps:
 - Deterministic headless `tick(state, deltaMs)` — no Date.now() inside tick
 - Batched offline progress via `calculateOfflineProgress(state, elapsedMs)`
 - Compute allocation: `allocations.computeByActivityId` (absolute, clamped)
-- Tick yield order: base yield → level scaling → compute allocation → upgrade effects → research effects
+- Tick yield order: base yield → level scaling → compute allocation → upgrade/research activity multipliers → research resource multipliers → path reputation multiplier → direction-aware reputation gain/loss multipliers
+- Activity yield sanitization prevents NaN/invalid deltas and clamps non-reputation yields to non-negative values
+- Action execution blocks when a compute-cost action does not have enough free (unallocated) compute
 
 ### Activities (9 total)
 
@@ -152,8 +154,10 @@ Research definitions include optional path positions for future tree UI.
 
 Key rules:
 - Manual actions do not require compute allocation to run.
-- Action performance uses config-driven reputation multipliers by path alignment.
+- Action performance uses config-driven multipliers in this order: reputation alignment, free-compute scaling (if enabled), duration scaling, success/failure branch, and variance.
 - `passwordAttempt` uses deterministic outcome resolution (state-seeded roll), not non-deterministic RNG.
+- Action reputation deltas are applied through a single path (`applyActionReputationDelta`) and include research gain/loss modifiers.
+- Runtime and UI projection use the same helper (`calculateActionReward(state, actionId)`) for reward display consistency.
 
 ### Tasks (7 total)
 
@@ -175,7 +179,21 @@ Task behavior:
 - Upgrade list + purchase buttons
 - Research list + purchase buttons + path label + cost line + completion status
 - Manual action list + execute buttons + lightweight outcome feedback
+- Manual action details: cost, base reward, projected reward, duration, reputation effect/multiplier, compute requirement and free compute availability
 - Task list + progress + claim buttons + recommended tasks hint
+
+## Resource/Reputation Consistency Notes
+
+- Canonical resource math remains Decimal-based end-to-end (runtime + helper projections).
+- Path reputation effects are active for both manual actions and activities:
+	- Positive reputation boosts whitehat path and penalizes blackhat path.
+	- Negative reputation boosts blackhat path and penalizes whitehat path.
+	- Shared and greyhat paths remain neutral.
+- Save/load remains scientific-notation based for Decimal values.
+
+## Known Limitations
+
+- `npm run build` can fail in some environments when optional rolldown native bindings are missing; TypeScript still validates with `npx vue-tsc -b`.
 
 ## Contributing Docs
 

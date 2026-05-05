@@ -9,6 +9,7 @@
 - Put balance in `src/core/config.ts`.
 - Keep upgrade progression level-based with deterministic multipliers.
 - Keep research progression graph-valid (no missing prereqs, self-deps, or cycles).
+- Keep action/activity display math aligned with runtime helpers (do not fork reward formulas in UI).
 
 ## Where to Add Features
 
@@ -29,6 +30,8 @@
 - Legacy key migration path in persistence
 - Upgrade level persistence compatibility (`upgrades.levelsById`)
 - Combined multiplier ordering (activity base/level/compute then upgrades/research)
+- Path-aware reputation multiplier behavior for both actions and activities
+- Free-compute gating for compute-cost manual actions
 - Research unlock integration (`activityUnlock`/`upgradeUnlock`) in shared helper paths
 
 ## Build / Typecheck Expectations

@@ -57,6 +57,11 @@ All runtime resource values are Decimal.
   - otherwise -> greyhat
 - Alignment is derived, never stored
 - Reputation gates support min, max, and alignment
+- Path multiplier model is multiplicative and smooth:
+  - whitehat path gets boosted by positive alignment and penalized by negative alignment
+  - blackhat path gets boosted by negative alignment and penalized by positive alignment
+  - shared/greyhat paths are neutral (multiplier 1)
+- `applyReputationEffects(state, value, path)` is the shared helper for path-aware scaling
 
 ## Activity Model
 
@@ -135,8 +140,15 @@ For each active activity in tick:
 1. Base activity yield
 2. Activity level scaling
 3. Compute allocation scaling (if enabled)
-4. Upgrade and research yield multipliers
-5. Consumption costs (activity deactivates if unaffordable)
+4. Upgrade/research activity multipliers
+5. Research resource multipliers
+6. Path reputation multiplier
+7. Direction-aware research reputation gain/loss multipliers for reputation resource
+8. Consumption costs (activity deactivates if unaffordable)
+
+Yield sanitization rules:
+- NaN/non-finite values are replaced with zero
+- Non-reputation negative yields are clamped to zero
 
 Order is deterministic for identical state + deltaMs.
 
@@ -205,9 +217,13 @@ Starter layer:
 src/dev/simulate.ts demonstrates:
 - manual action execution outcomes and deterministic success/failure behavior
 - free-compute scaling behavior for mineLocally
+- repeated per-action checks with projected reward vs applied reward logging
+- per-action resource delta and reputation delta tracing
 - activity purchases and activation
 - upgrade purchases and effect multipliers
 - compute allocation impact
+- compute requirement enforcement for manual actions that spend compute
+- compute scaling comparison checks for low vs high allocation
 - positive and negative reputation drift
 - research graph validation
 - shared + whitehat + blackhat research purchases under path gates
@@ -225,6 +241,7 @@ src/dev/simulate.ts demonstrates:
 - path-scoped upgrade content is not yet present (logic support exists)
 - no full research tree UI
 - no automation system
+- `npm run build` can fail in environments missing optional rolldown native bindings; run `npx vue-tsc -b` to validate TypeScript when this occurs
 
 ## Current Next Step
 

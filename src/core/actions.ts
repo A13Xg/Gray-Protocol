@@ -7,7 +7,8 @@ import type {
 } from "./types";
 import { GAME_CONFIG } from "./config";
 import { canAffordResources, applyResourceCost, createEmptyResourceMap } from "./resources";
-import { getReputationAlignment } from "./reputation";
+import { applyReputationDelta, getPathReputationMultiplier } from "./reputation";
+import { getResearchReputationMultipliers } from "./research";
 
 export const ACTION_DEFINITIONS: Record<string, ManualActionDefinition> = {
   scanNetwork: {
@@ -69,6 +70,12 @@ export const ACTION_DEFINITIONS: Record<string, ManualActionDefinition> = {
   },
 };
 
+function sanitizeResourceDelta(key: ResourceKey, value: Decimal): Decimal {
+  if (!value.isFinite() || Decimal.isNaN(value)) return new Decimal(0);
+  if (key !== "reputation" && value.lt(0)) return new Decimal(0);
+  return value;
+}
+
 function getFreeCompute(state: GameState): Decimal {
   let allocated = new Decimal(0);
   for (const amount of Object.values(state.allocations.computeByActivityId)) {
@@ -97,45 +104,15 @@ function applyVariance(base: Decimal, variance: Decimal, roll: Decimal): Decimal
 
 export function getReputationMultiplier(
   actionPath: ManualActionDefinition["path"],
-  playerAlignment: ReturnType<typeof getReputationAlignment>,
+  _playerAlignment: "whitehat" | "greyhat" | "blackhat",
   reputationValue: Decimal
 ): Decimal {
-  if (actionPath === "shared" || actionPath === "greyhat") {
-    return new Decimal(1);
-  }
+  return getPathReputationMultiplier(reputationValue, actionPath);
+}
 
-  const scaling = GAME_CONFIG.manualActionScaling.reputation;
-  const absRep = reputationValue.abs();
-
-  if (absRep.lt(scaling.greyNeutralThreshold)) {
-    return new Decimal(1);
-  }
-
-  const intensity = Decimal.min(new Decimal(1), absRep.div(scaling.curveReputationForMax));
-  const boostSpan = scaling.maxBoostMultiplier.sub(1);
-  const penaltySpan = new Decimal(1).sub(scaling.maxPenaltyMultiplier);
-
-  if (actionPath === "whitehat") {
-    if (playerAlignment === "whitehat") {
-      return new Decimal(1).add(boostSpan.mul(intensity));
-    }
-    if (playerAlignment === "blackhat") {
-      return new Decimal(1).sub(penaltySpan.mul(intensity));
-    }
-    return new Decimal(1);
-  }
-
-  if (actionPath === "blackhat") {
-    if (playerAlignment === "blackhat") {
-      return new Decimal(1).add(boostSpan.mul(intensity));
-    }
-    if (playerAlignment === "whitehat") {
-      return new Decimal(1).sub(penaltySpan.mul(intensity));
-    }
-    return new Decimal(1);
-  }
-
-  return new Decimal(1);
+export function getReputationActionMultiplier(state: GameState, action: ManualActionDefinition): Decimal {
+  if (!action.reputationScaling) return new Decimal(1);
+  return getPathReputationMultiplier(state.resources.reputation, action.path);
 }
 
 function getActionComputeMultiplier(state: GameState, action: ManualActionDefinition): Decimal {
@@ -154,17 +131,14 @@ function getActionDurationMultiplier(action: ManualActionDefinition): Decimal {
   return new Decimal(durationMs).div(60_000);
 }
 
-function calculateActionReward(
+function calculateActionRewardInternal(
   state: GameState,
   action: ManualActionDefinition,
   success: boolean,
   roll: Decimal
 ): Partial<Record<ResourceKey, Decimal>> {
   const result: Partial<Record<ResourceKey, Decimal>> = {};
-  const playerAlignment = getReputationAlignment(state.resources.reputation);
-  const reputationMultiplier = action.reputationScaling
-    ? getReputationMultiplier(action.path, playerAlignment, state.resources.reputation)
-    : new Decimal(1);
+  const reputationMultiplier = getReputationActionMultiplier(state, action);
   const computeMultiplier = getActionComputeMultiplier(state, action);
   const durationMultiplier = getActionDurationMultiplier(action);
   const variance = action.rewardVariance ?? new Decimal(0);
@@ -178,29 +152,60 @@ function calculateActionReward(
     }
 
     reward = applyVariance(reward, variance, roll);
-    result[key] = Decimal.max(new Decimal(0), reward);
+    result[key] = sanitizeResourceDelta(key, reward);
   }
 
   return result;
+}
+
+export function calculateActionReward(
+  state: GameState,
+  actionId: string
+): Partial<Record<ResourceKey, Decimal>> {
+  const action = ACTION_DEFINITIONS[actionId];
+  if (!action) return {};
+  const roll = deterministicRoll(state, action.id);
+  const successChance = action.successChance ?? new Decimal(1);
+  const success = roll.lte(successChance);
+  return calculateActionRewardInternal(state, action, success, roll);
+}
+
+export function applyActionReputationDelta(state: GameState, action: ManualActionDefinition): Decimal {
+  let delta = action.reputationEffect;
+  const repMultipliers = getResearchReputationMultipliers(state);
+  if (delta.gte(0)) {
+    delta = delta.mul(repMultipliers.gain);
+  } else {
+    delta = delta.mul(repMultipliers.loss);
+  }
+  if (!delta.isFinite() || Decimal.isNaN(delta)) {
+    return new Decimal(0);
+  }
+  applyReputationDelta(state, delta);
+  return delta;
 }
 
 export function resolveActionOutcome(action: ManualActionDefinition, state: GameState): ManualActionExecutionOutcome {
   const roll = deterministicRoll(state, action.id);
   const successChance = action.successChance ?? new Decimal(1);
   const success = roll.lte(successChance);
-  const appliedReward = calculateActionReward(state, action, success, roll);
-  const playerAlignment = getReputationAlignment(state.resources.reputation);
-  const reputationMultiplier = action.reputationScaling
-    ? getReputationMultiplier(action.path, playerAlignment, state.resources.reputation)
-    : new Decimal(1);
+  const appliedReward = calculateActionRewardInternal(state, action, success, roll);
+  const reputationMultiplier = getReputationActionMultiplier(state, action);
   const computeMultiplier = getActionComputeMultiplier(state, action);
+  let reputationDelta = action.reputationEffect;
+  const repMultipliers = getResearchReputationMultipliers(state);
+  if (reputationDelta.gte(0)) {
+    reputationDelta = reputationDelta.mul(repMultipliers.gain);
+  } else {
+    reputationDelta = reputationDelta.mul(repMultipliers.loss);
+  }
 
   return {
     actionId: action.id,
     success,
     appliedCost: { ...action.baseCost },
     appliedReward,
-    reputationDelta: action.reputationEffect,
+    reputationDelta,
     reputationMultiplier,
     computeMultiplier,
     roll,
@@ -210,14 +215,22 @@ export function resolveActionOutcome(action: ManualActionDefinition, state: Game
 
 function applyReward(state: GameState, reward: Partial<Record<ResourceKey, Decimal>>): void {
   for (const [key, amount] of Object.entries(reward) as Array<[ResourceKey, Decimal]>) {
-    state.resources[key] = state.resources[key].add(amount);
+    const sanitized = sanitizeResourceDelta(key, amount);
+    state.resources[key] = state.resources[key].add(sanitized);
   }
+}
+
+function hasFreeComputeForAction(state: GameState, action: ManualActionDefinition): boolean {
+  const computeCost = action.baseCost.compute;
+  if (!computeCost || computeCost.lte(0)) return true;
+  return getFreeCompute(state).gte(computeCost);
 }
 
 export function canExecuteAction(state: GameState, actionId: string): boolean {
   const action = ACTION_DEFINITIONS[actionId];
   if (!action) return false;
   if (!canAffordResources(state.resources, action.baseCost)) return false;
+  if (!hasFreeComputeForAction(state, action)) return false;
 
   const cooldownMs = action.cooldownMs ?? 0;
   if (cooldownMs <= 0) return true;
@@ -235,7 +248,7 @@ export function executeAction(state: GameState, actionId: string): ManualActionE
   state.resources = applyResourceCost(state.resources, action.baseCost);
   const outcome = resolveActionOutcome(action, state);
   applyReward(state, outcome.appliedReward);
-  state.resources.reputation = state.resources.reputation.add(outcome.reputationDelta);
+  outcome.reputationDelta = applyActionReputationDelta(state, action);
 
   state.manualActions.totalExecutions += 1;
   state.manualActions.executedById[actionId] = (state.manualActions.executedById[actionId] ?? 0) + 1;
