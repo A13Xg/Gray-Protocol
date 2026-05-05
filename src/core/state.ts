@@ -1,56 +1,40 @@
+// src/core/state.ts
 import { shallowReactive } from "vue";
-import Decimal from "break_eternity.js";
-import { INITIAL_RESOURCES, VERSION } from "./config";
+import type { GameState, ActivityState, PrestigeLayerState } from "./types";
+import { VERSION } from "./config";
+import { createInitialResourceMap } from "./resources";
+import { ACTIVITY_DEFINITIONS } from "./activities";
 
-export interface ComputeState {
-  total: Decimal;
-  used: Decimal;
+function createInitialActivities(): Record<string, ActivityState> {
+  const activities: Record<string, ActivityState> = {};
+  for (const id of Object.keys(ACTIVITY_DEFINITIONS)) {
+    activities[id] = { id, level: 0, unlocked: false, active: false };
+  }
+  return activities;
 }
 
-export interface NodeAllocation {
-  [nodeId: string]: Decimal;
+function createInitialPrestigeLayers(): Record<string, PrestigeLayerState> {
+  return {};
 }
 
-export interface GameState {
-  // Resources
-  money: Decimal;
-  crypto: Decimal;
-  parity: Decimal;
-  compute: ComputeState;
-
-  // Progress
-  nodes: Map<string, number>; // nodeId → level
-  upgrades: Set<string>; // unlocked perk IDs
-
-  // Allocation map (how much compute each node is using)
-  nodeAllocations: NodeAllocation;
-
-  // Meta
-  lastSaveTime: number; // Unix timestamp in ms
-  version: string;
-
-  // System log
-  log: string[];
+export function createInitialGameState(): GameState {
+  return {
+    version: VERSION,
+    resources: createInitialResourceMap(),
+    activities: createInitialActivities(),
+    research: { completed: new Set() },
+    prestige: { layers: createInitialPrestigeLayers() },
+    allocations: { computePowerByActivityId: {} },
+    timestamps: {
+      createdAt: Date.now(),
+      lastSavedAt: Date.now(),
+      lastTickAt: Date.now(),
+    },
+    log: [],
+  };
 }
 
-export const state: GameState = shallowReactive<GameState>({
-  money: new Decimal(INITIAL_RESOURCES.money),
-  crypto: new Decimal(INITIAL_RESOURCES.crypto),
-  parity: new Decimal(INITIAL_RESOURCES.parity),
-  compute: {
-    total: new Decimal(INITIAL_RESOURCES.computeTotal),
-    used: new Decimal(INITIAL_RESOURCES.computeUsed),
-  },
-
-  nodes: new Map(),
-  upgrades: new Set(),
-  nodeAllocations: {},
-
-  lastSaveTime: Date.now(),
-  version: VERSION,
-
-  log: [],
-});
+export const state: GameState = shallowReactive<GameState>(createInitialGameState());
 
 export function pushLog(message: string): void {
   const timestamp = new Date().toLocaleTimeString();

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, computed, ref } from "vue";
 import { state, pushLog } from "./core/state";
-import { purchase, startGameLoop, stopGameLoop } from "./core/engine";
+import { purchase, startGameLoop, stopGameLoop, getTotalAllocatedCompute } from "./core/engine";
 import { saveGame, loadGame, exportSave, importSave } from "./core/persistence";
 import { format } from "./utils/formatter";
 
@@ -17,31 +17,31 @@ onUnmounted(() => {
 });
 
 // ── Formatted resource accessors ─────────────────────────────────────────────
-const fmtMoney = computed(() => format(state.money));
-const fmtCrypto = computed(() => format(state.crypto));
-const fmtParity = computed(() => format(state.parity));
-const fmtComputeTotal = computed(() => format(state.compute.total));
-const fmtComputeUsed = computed(() => format(state.compute.used));
+const fmtMoney = computed(() => format(state.resources.money));
+const fmtCrypto = computed(() => format(state.resources.cryptoCurrency));
+const fmtReputation = computed(() => format(state.resources.reputationStanding));
+const fmtComputeTotal = computed(() => format(state.resources.computePower));
+const fmtComputeUsed = computed(() => format(getTotalAllocatedCompute(state)));
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 
-/** Run Bug Bounty: +10 Money, +3 Parity */
+/** Run Bug Bounty: +10 Money, +3 Reputation */
 function runBugBounty(): void {
-  const ok = purchase({ money: -10, parity: -3 }); // negative cost = gain
+  const ok = purchase({ money: -10, reputationStanding: -3 }); // negative cost = gain
   if (ok) {
-    pushLog("🐛 Bug Bounty complete! +10 Money, +3 Parity");
+    pushLog("🐛 Bug Bounty complete! +10 Money, +3 Reputation");
   } else {
     pushLog("⚠ Bug Bounty failed (insufficient resources)");
   }
 }
 
-/** Illegal Script: +25 Money, -5 Parity */
+/** Illegal Script: +25 Money, -5 Reputation */
 function runIllegalScript(): void {
-  const ok = purchase({ money: -25, parity: 5 }); // cost 5 parity, gain 25 money
+  const ok = purchase({ money: -25, reputationStanding: 5 }); // cost 5 reputation, gain 25 money
   if (ok) {
-    pushLog("💀 Illegal Script executed! +25 Money, −5 Parity");
+    pushLog("💀 Illegal Script executed! +25 Money, −5 Reputation");
   } else {
-    pushLog("⚠ Illegal Script failed (insufficient Parity)");
+    pushLog("⚠ Illegal Script failed (insufficient Reputation)");
   }
 }
 
@@ -79,7 +79,7 @@ function onImport(): void {
           <tbody>
             <tr><td>💰 Money</td><td class="val">{{ fmtMoney }}</td></tr>
             <tr><td>🔐 Crypto</td><td class="val">{{ fmtCrypto }}</td></tr>
-            <tr><td>⚖ Parity</td><td class="val">{{ fmtParity }}</td></tr>
+            <tr><td>⚖ Reputation</td><td class="val">{{ fmtReputation }}</td></tr>
             <tr>
               <td>🖥 Compute</td>
               <td class="val">{{ fmtComputeUsed }} / {{ fmtComputeTotal }}</td>
@@ -92,10 +92,10 @@ function onImport(): void {
       <section class="panel actions-panel">
         <h2>🔧 Actions</h2>
         <button class="btn btn-bounty" @click="runBugBounty">
-          🐛 Run Bug Bounty<br /><small>+10 Money, +3 Parity</small>
+          🐛 Run Bug Bounty<br /><small>+10 Money, +3 Reputation</small>
         </button>
         <button class="btn btn-illegal" @click="runIllegalScript">
-          💀 Illegal Script<br /><small>+25 Money, −5 Parity</small>
+          💀 Illegal Script<br /><small>+25 Money, −5 Reputation</small>
         </button>
       </section>
 
