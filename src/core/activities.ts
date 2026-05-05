@@ -4,6 +4,7 @@ import { GAME_CONFIG } from "./config";
 import { canAccessReputationGate } from "./reputation";
 import { applyMultiplier, scaleExponential, scaleLinear } from "./math";
 import { applyResourceCost, canAffordResources, createEmptyResourceMap } from "./resources";
+import { getResearchReputationMultipliers, getResearchResourceYieldMultipliers, isActivityUnlockedByResearch } from "./research";
 
 export const ACTIVITY_DEFINITIONS: Record<string, ActivityDefinition> = {
   basicCryptoMining: {
@@ -51,6 +52,97 @@ export const ACTIVITY_DEFINITIONS: Record<string, ActivityDefinition> = {
     reputationGate: GAME_CONFIG.activities.passwordCracking.reputationGate,
     usesComputeAllocation: true,
   },
+  computeLeasing: {
+    id: "computeLeasing",
+    name: "Compute Leasing",
+    path: "shared",
+    description: "Lease allocated compute cycles to external clients for steady money income.",
+    baseCost: GAME_CONFIG.activities.computeLeasing.baseCost,
+    baseYieldPerSecond: GAME_CONFIG.activities.computeLeasing.baseYieldPerSecond,
+    costScalingRate: GAME_CONFIG.activities.computeLeasing.costScalingRate,
+    yieldScalingRate: GAME_CONFIG.activities.computeLeasing.yieldScalingRate,
+    levelCostScaling: GAME_CONFIG.activities.computeLeasing.levelCostScaling,
+    yieldScaling: GAME_CONFIG.activities.computeLeasing.yieldScaling,
+    maxLevel: GAME_CONFIG.activities.computeLeasing.maxLevel,
+    usesComputeAllocation: true,
+  },
+  dataIndexing: {
+    id: "dataIndexing",
+    name: "Data Indexing",
+    path: "shared",
+    description: "Index large datasets to earn money and reclaim compute capacity.",
+    baseCost: GAME_CONFIG.activities.dataIndexing.baseCost,
+    baseYieldPerSecond: GAME_CONFIG.activities.dataIndexing.baseYieldPerSecond,
+    costScalingRate: GAME_CONFIG.activities.dataIndexing.costScalingRate,
+    yieldScalingRate: GAME_CONFIG.activities.dataIndexing.yieldScalingRate,
+    levelCostScaling: GAME_CONFIG.activities.dataIndexing.levelCostScaling,
+    yieldScaling: GAME_CONFIG.activities.dataIndexing.yieldScaling,
+    maxLevel: GAME_CONFIG.activities.dataIndexing.maxLevel,
+    usesComputeAllocation: true,
+  },
+  defensiveAudit: {
+    id: "defensiveAudit",
+    name: "Defensive Audit",
+    path: "whitehat",
+    description: "Perform ethical security audits to build trust and earn consulting fees.",
+    baseCost: GAME_CONFIG.activities.defensiveAudit.baseCost,
+    baseYieldPerSecond: GAME_CONFIG.activities.defensiveAudit.baseYieldPerSecond,
+    costScalingRate: GAME_CONFIG.activities.defensiveAudit.costScalingRate,
+    yieldScalingRate: GAME_CONFIG.activities.defensiveAudit.yieldScalingRate,
+    levelCostScaling: GAME_CONFIG.activities.defensiveAudit.levelCostScaling,
+    yieldScaling: GAME_CONFIG.activities.defensiveAudit.yieldScaling,
+    maxLevel: GAME_CONFIG.activities.defensiveAudit.maxLevel,
+    reputationGate: GAME_CONFIG.activities.defensiveAudit.reputationGate,
+    usesComputeAllocation: false,
+  },
+  threatIntelAnalysis: {
+    id: "threatIntelAnalysis",
+    name: "Threat Intel Analysis",
+    path: "whitehat",
+    description: "Analyze threat feeds with compute power to command premium consulting rates.",
+    baseCost: GAME_CONFIG.activities.threatIntelAnalysis.baseCost,
+    baseYieldPerSecond: GAME_CONFIG.activities.threatIntelAnalysis.baseYieldPerSecond,
+    costScalingRate: GAME_CONFIG.activities.threatIntelAnalysis.costScalingRate,
+    yieldScalingRate: GAME_CONFIG.activities.threatIntelAnalysis.yieldScalingRate,
+    levelCostScaling: GAME_CONFIG.activities.threatIntelAnalysis.levelCostScaling,
+    yieldScaling: GAME_CONFIG.activities.threatIntelAnalysis.yieldScaling,
+    maxLevel: GAME_CONFIG.activities.threatIntelAnalysis.maxLevel,
+    reputationGate: GAME_CONFIG.activities.threatIntelAnalysis.reputationGate,
+    requiresResearchUnlock: GAME_CONFIG.activities.threatIntelAnalysis.requiresResearchUnlock,
+    usesComputeAllocation: true,
+  },
+  botnetExpansion: {
+    id: "botnetExpansion",
+    name: "Botnet Expansion",
+    path: "blackhat",
+    description: "Grow a botnet to harvest compute resources and crypto, consuming money as upkeep.",
+    baseCost: GAME_CONFIG.activities.botnetExpansion.baseCost,
+    baseYieldPerSecond: GAME_CONFIG.activities.botnetExpansion.baseYieldPerSecond,
+    consumesPerSecond: GAME_CONFIG.activities.botnetExpansion.consumesPerSecond,
+    costScalingRate: GAME_CONFIG.activities.botnetExpansion.costScalingRate,
+    yieldScalingRate: GAME_CONFIG.activities.botnetExpansion.yieldScalingRate,
+    levelCostScaling: GAME_CONFIG.activities.botnetExpansion.levelCostScaling,
+    yieldScaling: GAME_CONFIG.activities.botnetExpansion.yieldScaling,
+    maxLevel: GAME_CONFIG.activities.botnetExpansion.maxLevel,
+    reputationGate: GAME_CONFIG.activities.botnetExpansion.reputationGate,
+    usesComputeAllocation: true,
+  },
+  zeroDayResearch: {
+    id: "zeroDayResearch",
+    name: "Zero-Day Research",
+    path: "blackhat",
+    description: "Discover high-value exploits for significant crypto gains at severe reputational cost.",
+    baseCost: GAME_CONFIG.activities.zeroDayResearch.baseCost,
+    baseYieldPerSecond: GAME_CONFIG.activities.zeroDayResearch.baseYieldPerSecond,
+    costScalingRate: GAME_CONFIG.activities.zeroDayResearch.costScalingRate,
+    yieldScalingRate: GAME_CONFIG.activities.zeroDayResearch.yieldScalingRate,
+    levelCostScaling: GAME_CONFIG.activities.zeroDayResearch.levelCostScaling,
+    yieldScaling: GAME_CONFIG.activities.zeroDayResearch.yieldScaling,
+    maxLevel: GAME_CONFIG.activities.zeroDayResearch.maxLevel,
+    reputationGate: GAME_CONFIG.activities.zeroDayResearch.reputationGate,
+    requiresResearchUnlock: GAME_CONFIG.activities.zeroDayResearch.requiresResearchUnlock,
+    usesComputeAllocation: false,
+  },
 };
 
 export function getActivityDefinition(activityId: string): ActivityDefinition | undefined {
@@ -83,9 +175,19 @@ export function canUnlockActivity(state: GameState, activityId: string): boolean
     return false;
   }
 
+  if (def.requiresResearchUnlock && !isActivityUnlockedByResearch(state, activityId)) {
+    return false;
+  }
+
   if (def.unlockRequirements) {
+    let allRequirementsMet = true;
     for (const requirement of def.unlockRequirements) {
-      if (!state.research.completed.has(requirement)) return false;
+      if (!state.research.completed.has(requirement)) {
+        allRequirementsMet = false;
+      }
+    }
+    if (!allRequirementsMet && !isActivityUnlockedByResearch(state, activityId)) {
+      return false;
     }
   }
 
@@ -136,10 +238,29 @@ export function calculateActivityYield(
     ? Decimal.max(new Decimal(0), allocatedCompute.mul(computeEfficiencyMultiplier).add(1))
     : new Decimal(1);
   const researchMultiplier = researchMultipliers[activityId] ?? new Decimal(1);
+  const researchResourceMultipliers = getResearchResourceYieldMultipliers(state);
+  const reputationMultipliers = getResearchReputationMultipliers(state);
 
   const yields: Partial<Record<ResourceKey, Decimal>> = {};
   for (const [key, baseRate] of Object.entries(def.baseYieldPerSecond) as Array<[ResourceKey, Decimal]>) {
-    const perSecond = applyMultiplier(applyMultiplier(applyMultiplier(baseRate, levelMultiplier), computeMultiplier), researchMultiplier);
+    const resourceMultiplier = researchResourceMultipliers[key] ?? new Decimal(1);
+    let perSecond = applyMultiplier(
+      applyMultiplier(
+        applyMultiplier(applyMultiplier(baseRate, levelMultiplier), computeMultiplier),
+        researchMultiplier
+      ),
+      resourceMultiplier
+    );
+
+    // Direction-sensitive reputation scaling: gains and losses are modified separately.
+    if (key === "reputation") {
+      if (perSecond.gte(0)) {
+        perSecond = perSecond.mul(reputationMultipliers.gain);
+      } else {
+        perSecond = perSecond.mul(reputationMultipliers.loss);
+      }
+    }
+
     yields[key] = perSecond.mul(deltaSeconds);
   }
 

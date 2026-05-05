@@ -6,167 +6,201 @@ Gray Protocol is a static, deterministic, headless-first incremental game engine
 
 ## Architecture Map
 
-- `src/core/config.ts`: all balance/config constants and metadata
-- `src/core/types.ts`: canonical domain types
-- `src/core/math.ts`: Decimal-safe math and scientific serialization helpers
-- `src/core/resources.ts`: canonical resource map helpers
-- `src/core/activities.ts`: activity definitions and delta/cost/yield logic
-- `src/core/research.ts`: research eligibility, purchases, and effects
-- `src/core/prestige.ts`: protocol reset foundation layer
-- `src/core/engine.ts`: deterministic tick + offline batching + compute allocation
-- `src/core/persistence.ts`: save/load/export/import + migration + codec
-- `src/core/validation.ts`: runtime/save validation rules
-- `src/dev/simulate.ts`: no-framework simulation harness
+- src/core/config.ts: all balance/config constants (activities, upgrades, research, prestige, resources)
+- src/core/types.ts: canonical domain types
+- src/core/math.ts: Decimal-safe math and scientific serialization helpers
+- src/core/resources.ts: canonical resource map helpers
+- src/core/activities.ts: activity definitions and delta/cost/yield logic
+- src/core/upgrades.ts: upgrade definitions, purchase logic, and multiplier helpers
+- src/core/research.ts: research eligibility, purchases, and effects
+- src/core/prestige.ts: protocol reset foundation layer
+- src/core/engine.ts: deterministic tick, offline batching, compute allocation
+- src/core/persistence.ts: save/load/export/import, migration, codec
+- src/core/validation.ts: runtime/save validation rules
+- src/core/state.ts: reactive singleton GameState
+- src/dev/simulate.ts: no-framework simulation harness
+- src/App.vue: thin Vue UI (resources, activities, upgrades, save, log)
 
 ## Resource Model
 
-Canonical resource keys only:
+Canonical resource keys only: money, crypto, compute, reputation.
 
-- `money`
-- `crypto`
-- `compute`
-- `reputation`
-
-All runtime resource values are `Decimal`.
+All runtime resource values are Decimal.
 
 ## Numeric / Scientific Storage Model
 
-- Runtime math uses `Decimal` (break_eternity.js)
-- Save payload uses scientific string values via:
-  - `serializeDecimal`
-  - `deserializeDecimal`
-  - `serializeResourceMap`
-  - `deserializeResourceMap`
-- Decoded payload numbers are never localized or UI-formatted strings
+- Runtime math uses Decimal (break_eternity.js)
+- Save payload uses scientific strings via serializeDecimal / deserializeDecimal
+- Decoded payload numbers are never localized/UI-formatted strings
+- Upgrade levels are plain number values (integers bounded by maxLevel)
 
 ## Reputation Model
 
-- `reputation` is signed and additive
-- Alignment thresholds come from config:
-  - `> whitehatThreshold`: `whitehat`
-  - `< blackhatThreshold`: `blackhat`
-  - otherwise: `greyhat`
-- Alignment is derived, not stored
-- Reputation gates support `min`, `max`, and `alignment`
+- reputation is signed and additive
+- Alignment thresholds from config:
+  - reputation > whitehatThreshold -> whitehat
+  - reputation < blackhatThreshold -> blackhat
+  - otherwise -> greyhat
+- Alignment is derived, never stored
+- Reputation gates support min, max, and alignment
 
 ## Activity Model
 
-Config-driven starter activities:
+There are 9 config-driven activities:
 
-1. `basicCryptoMining` (shared, compute allocation)
-2. `bugBountyHunting` (whitehat, money + positive reputation)
-3. `passwordCracking` (blackhat, compute allocation, money/crypto + negative reputation)
+Shared:
+- basicCryptoMining
+- computeLeasing
+- dataIndexing
 
-Implemented helper surface:
+Whitehat:
+- bugBountyHunting
+- defensiveAudit
+- threatIntelAnalysis
 
-- `getActivityDefinition`
-- `getActivityState`
-- `canUnlockActivity`
-- `canAffordActivityLevel`
-- `purchaseActivityLevel`
-- `calculateActivityYield`
-- `calculateActivityDelta`
-- `getActiveActivityDeltas`
+Blackhat:
+- passwordCracking
+- botnetExpansion
+- zeroDayResearch
+
+Each activity supports level scaling, optional reputation gates, optional resource consumption, and optional compute allocation usage.
+
+Advanced activities can opt into research-based unlock gating via `requiresResearchUnlock`, resolved through active `activityUnlock` research effects.
 
 Activities return deltas; engine applies deltas.
+
+## Upgrade Model
+
+There are 14 config-driven upgrades:
+- 12 activity-specific upgrades (1-2 per activity)
+- 2 global upgrades
+
+UpgradeDefinition fields:
+- id, name, description, scope (activity/path/global)
+- activityId?, path?
+- cost, maxLevel, costScaling, costScalingRate
+- effects
+- reputationGate?
+- prerequisites?
+
+Upgrade state:
+- state.upgrades.levelsById: Record<string, number>
+
+Supported implemented effects:
+- activityYieldMultiplier
+- computeEfficiencyMultiplier
+
+Defined but not yet used in content:
+- activityCostMultiplier
+- reputationGainMultiplier
+- reputationLossMultiplier
+
+Advanced upgrades can opt into research-based unlock gating via `requiresResearchUnlock`, resolved through active `upgradeUnlock` research effects.
 
 ## Compute Allocation
 
 State path:
-
-- `allocations.computeByActivityId`
+- allocations.computeByActivityId: Record<string, Decimal>
 
 Behavior:
+- setComputeAllocation clamps to available compute
+- activities with usesComputeAllocation apply multiplier: allocatedCompute * computeEfficiency + 1
+- compute efficiency combines research and upgrades multiplicatively
 
-- Absolute allocation values (not percentages)
-- Clamped to available total compute
-- Per-activity allocation getters/setters in engine
-- Serialized as scientific strings in save payload
+## Tick Yield Order
+
+For each active activity in tick:
+1. Base activity yield
+2. Activity level scaling
+3. Compute allocation scaling (if enabled)
+4. Upgrade and research yield multipliers
+5. Consumption costs (activity deactivates if unaffordable)
+
+Order is deterministic for identical state + deltaMs.
 
 ## Research Foundation
 
-Config-driven starter nodes:
+Research tree has 9 nodes:
 
-1. `parallelProcessing`
-2. `responsibleDisclosure`
-3. `exploitAutomation`
+Shared path:
+- parallelProcessing
+- distributedSchedulers
+- protocolOptimization
 
-Implemented helper surface:
+Whitehat path:
+- responsibleDisclosure
+- defensiveAutomation
+- trustedResearchNetwork
 
-- `canResearchNode`
-- `purchaseResearchNode`
-- `getActiveResearchEffects`
-- `applyResearchEffectsToYield`
-- prerequisite checks
-- reputation gate checks
-- affordability checks
+Blackhat path:
+- exploitAutomation
+- distributedIntrusionTooling
+- zeroDaySupplyChain
+
+Research effects implemented in runtime:
+- resourceMultiplier
+- activityYieldMultiplier
+- computeEfficiencyMultiplier
+- reputationGainMultiplier
+- reputationLossMultiplier
+- activityUnlock
+- upgradeUnlock
+
+Research definitions include optional `position` metadata for future graphical tree rendering.
 
 ## Prestige Foundation
 
-Single layer: `protocolReset`
+Starter layer:
+- protocolReset
 
-Implemented helper surface:
+## Persistence Format
 
-- `canPrestige`
-- `previewPrestigeGain`
-- `performPrestige`
-
-Behavior is config-driven for requirements, reset lists, reward resource/value, and research preservation.
-
-## Persistence / Save Format
-
-Top-level save envelope:
-
-- `version`
-- `createdAt`
-- `updatedAt`
-- `payload`
-
-Payload contains serialized game state with scientific-string numbers and canonical resources.
-
-Migration support includes legacy keys:
-
-- `cryptoCurrency` -> `crypto`
-- `computePower` -> `compute`
-- `reputationStanding` -> `reputation`
-
-Unknown legacy keys like `parity` are dropped.
+- Save key: gray_protocol_save_v3
+- Legacy key fallback: gray_protocol_save_v2
+- Save envelope: SaveFile { version, createdAt, updatedAt, payload }
+- Payload is Base64-obfuscated JSON by default codec
+- Resource/Decimal values are scientific strings in payload
+- Upgrade levels are numeric in payload
+- Missing/invalid upgrade state is repaired (unknown IDs dropped, levels clamped)
 
 ## Validation Rules
 
-Validation enforces:
-
-- canonical resource key set
-- Decimal validity in runtime state
-- scientific-string validity in serialized payload
-- valid activity/research/prestige IDs
-- allocation total <= available compute
-- save envelope integrity
+- Canonical resource keys enforced
+- Decimal validity checks for runtime state
+- Scientific-string checks for serialized numeric fields
+- Activity/research/prestige/upgrade ID validation
+- Upgrade level bounds [0, maxLevel]
+- Allocation totals must not exceed available compute
+- Research definition integrity validation
+  - missing prerequisite IDs
+  - self-dependencies
+  - circular dependencies
+  - invalid effect references (activity/upgrade/resource targets)
+  - invalid Decimal costs/effect values
 
 ## Simulation Harness
 
-`src/dev/simulate.ts` demonstrates:
-
-- fresh state creation
-- canonical resources
-- scientific serialization preview
-- compute allocation
-- activity ticking
-- additive reputation change
-- research purchase attempt
+src/dev/simulate.ts demonstrates:
+- activity purchases and activation
+- upgrade purchases and effect multipliers
+- compute allocation impact
+- positive and negative reputation drift
+- research graph validation
+- shared + whitehat + blackhat research purchases under path gates
+- research unlock effects on activity availability
+- research-driven compute/resource yield changes
 - prestige preview
-- offline progress
-- validation pass/fail logging
+- serialization with upgrade levels
+- serialization with completed research IDs
+- validateGameState and validateSerializedGameState pass
 
 ## Known Limitations
 
-- No formal automated test framework yet
-- Save codec is obfuscation-focused (Base64), not cryptographic encryption
-- UI still includes simple action buttons that bypass richer progression surfaces
+- activityCostMultiplier and reputation gain/loss upgrade effects are defined but not yet wired to runtime content
+- path-scoped upgrade content is not yet present (logic support exists)
+- no full research tree UI
+- no automation system
 
-## Recommended Next Implementation Steps
+## Recommended Next Step
 
-1. Add deterministic unit tests around `tick`, serialization, and migrations.
-2. Add activity/research unlock progression UI that uses existing headless APIs.
-3. Expand validation repair logic for corrupted payload subsections.
-4. Add explicit save migration versioning table for future schema evolution.
+Prestige Expansion Layer or Manual Action/Task Layer discussion.

@@ -12,6 +12,8 @@ import {
 import { saveGame, loadGame, exportSave, importSave } from "./core/persistence";
 import { format } from "./utils/formatter";
 import { ACTIVITY_DEFINITIONS, canUnlockActivity, purchaseActivityLevel } from "./core/activities";
+import { UPGRADE_DEFINITIONS, canPurchaseUpgrade, getUpgradeLevel, purchaseUpgrade } from "./core/upgrades";
+import { canResearchNode, purchaseResearchNode, RESEARCH_DEFINITIONS } from "./core/research";
 
 onMounted(() => {
   loadGame();
@@ -29,6 +31,8 @@ const fmtReputation = computed(() => format(state.resources.reputation));
 const fmtComputeTotal = computed(() => format(state.resources.compute));
 const fmtComputeUsed = computed(() => format(getTotalAllocatedCompute(state)));
 const activityIds = Object.keys(ACTIVITY_DEFINITIONS);
+const upgradeIds = Object.keys(UPGRADE_DEFINITIONS);
+const researchIds = Object.keys(RESEARCH_DEFINITIONS);
 
 function buyLevel(activityId: string): void {
   purchaseActivityLevel(state, activityId);
@@ -69,6 +73,40 @@ function onImport(): void {
     importInput.value = "";
   }
 }
+
+function upgradeLevel(upgradeId: string): number {
+  return getUpgradeLevel(state, upgradeId);
+}
+
+function canBuyUpgrade(upgradeId: string): boolean {
+  return canPurchaseUpgrade(state, upgradeId);
+}
+
+function buyUpgrade(upgradeId: string): void {
+  purchaseUpgrade(state, upgradeId);
+}
+
+function isResearchCompleted(nodeId: string): boolean {
+  return state.research.completed.has(nodeId);
+}
+
+function canBuyResearch(nodeId: string): boolean {
+  return canResearchNode(state, nodeId);
+}
+
+function buyResearch(nodeId: string): void {
+  purchaseResearchNode(state, nodeId);
+}
+
+function researchCostLabel(nodeId: string): string {
+  const def = RESEARCH_DEFINITIONS[nodeId];
+  if (!def) return "";
+  const parts: string[] = [];
+  for (const [resource, amount] of Object.entries(def.cost)) {
+    parts.push(`${resource}: ${format(amount as Decimal)}`);
+  }
+  return parts.join(" | ");
+}
 </script>
 
 <template>
@@ -89,6 +127,7 @@ function onImport(): void {
         <div class="activity-title">
           <strong>{{ ACTIVITY_DEFINITIONS[activityId].name }}</strong>
           <span>
+            <em class="path">{{ ACTIVITY_DEFINITIONS[activityId].path }}</em>
             L{{ state.activities[activityId].level }}
             {{ state.activities[activityId].active ? "(Active)" : "(Idle)" }}
           </span>
@@ -109,6 +148,36 @@ function onImport(): void {
           <span class="alloc">Allocated: {{ activityAllocation(activityId) }}</span>
           <button @click="addCompute(activityId)">+ Compute</button>
         </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Upgrades</h2>
+      <div v-for="upgradeId in upgradeIds" :key="upgradeId" class="upgrade">
+        <div class="upgrade-row">
+          <span class="upgrade-name">{{ UPGRADE_DEFINITIONS[upgradeId].name }}</span>
+          <span class="upgrade-level">{{ upgradeLevel(upgradeId) }} / {{ UPGRADE_DEFINITIONS[upgradeId].maxLevel }}</span>
+          <button
+            :disabled="!canBuyUpgrade(upgradeId)"
+            @click="buyUpgrade(upgradeId)"
+          >Buy</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Research</h2>
+      <div v-for="researchId in researchIds" :key="researchId" class="research">
+        <div class="research-row">
+          <span class="research-name">{{ RESEARCH_DEFINITIONS[researchId].name }}</span>
+          <span class="research-path">{{ RESEARCH_DEFINITIONS[researchId].path }}</span>
+          <span class="research-state">{{ isResearchCompleted(researchId) ? "Complete" : "Pending" }}</span>
+          <button
+            :disabled="isResearchCompleted(researchId) || !canBuyResearch(researchId)"
+            @click="buyResearch(researchId)"
+          >Research</button>
+        </div>
+        <div class="research-cost">{{ researchCostLabel(researchId) }}</div>
       </div>
     </section>
 
@@ -197,6 +266,62 @@ button {
   color: #d8f5d8;
   padding: 4px 8px;
   cursor: pointer;
+}
+
+.path {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-right: 4px;
+}
+
+.upgrade {
+  border-top: 1px solid #243624;
+  padding-top: 6px;
+  margin-top: 6px;
+}
+
+.upgrade-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.upgrade-name {
+  flex: 1;
+}
+
+.upgrade-level {
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.research {
+  border-top: 1px solid #243624;
+  padding-top: 6px;
+  margin-top: 6px;
+}
+
+.research-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.research-name {
+  flex: 1;
+}
+
+.research-path,
+.research-state,
+.research-cost {
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.research-cost {
+  margin-top: 4px;
 }
 
 button:disabled {

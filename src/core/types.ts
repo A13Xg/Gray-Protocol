@@ -32,6 +32,7 @@ export interface ActivityDefinition {
   maxLevel: number;
   reputationGate?: ReputationGate;
   unlockRequirements?: string[];
+  requiresResearchUnlock?: boolean;
   consumesPerSecond?: Partial<ResourceMap>;
   usesComputeAllocation: boolean;
 }
@@ -46,8 +47,10 @@ export interface ActivityState {
 export type ResearchEffectType =
   | "resourceMultiplier"
   | "activityYieldMultiplier"
+  | "upgradeUnlock"
   | "activityUnlock"
   | "reputationGainMultiplier"
+  | "reputationLossMultiplier"
   | "computeEfficiencyMultiplier";
 
 export interface ResearchEffect {
@@ -60,10 +63,48 @@ export interface ResearchNodeDefinition {
   id: string;
   name: string;
   description: string;
+  path: ActivityPath;
   cost: Partial<ResourceMap>;
   prerequisites: string[];
   reputationGate?: ReputationGate;
+  position?: { x: number; y: number };
   effects: ResearchEffect[];
+}
+
+export type UpgradeScope = "activity" | "path" | "global";
+
+export type UpgradeEffectType =
+  | "activityYieldMultiplier"
+  | "activityCostMultiplier"
+  | "computeEfficiencyMultiplier"
+  | "reputationGainMultiplier"
+  | "reputationLossMultiplier";
+
+export interface UpgradeEffect {
+  type: UpgradeEffectType;
+  target?: string;
+  value: Decimal;
+}
+
+export interface UpgradeDefinition {
+  id: string;
+  name: string;
+  description: string;
+  scope: UpgradeScope;
+  activityId?: string;
+  path?: ActivityPath;
+  cost: Partial<ResourceMap>;
+  maxLevel: number;
+  costScaling: ScalingType;
+  costScalingRate: Decimal;
+  effects: UpgradeEffect[];
+  reputationGate?: ReputationGate;
+  prerequisites?: string[];
+  requiresResearchUnlock?: boolean;
+}
+
+export interface UpgradeState {
+  levelsById: Record<string, number>;
 }
 
 export interface PrestigeLayerDefinition {
@@ -107,6 +148,7 @@ export interface GameState {
     layers: Record<string, PrestigeLayerState>;
   };
   allocations: AllocationMap;
+  upgrades: UpgradeState;
   timestamps: {
     createdAt: number;
     lastSavedAt: number;
@@ -136,6 +178,7 @@ export interface SerializedGameState {
     }
   >;
   allocations: SerializedAllocationMap;
+  upgrades: { levelsById: Record<string, number> };
   timestamps: {
     createdAt: number;
     lastSavedAt: number;

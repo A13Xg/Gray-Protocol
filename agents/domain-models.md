@@ -16,6 +16,7 @@
 - `research.completed: Set<string>`
 - `prestige.layers: Record<string, PrestigeLayerState>`
 - `allocations.computeByActivityId: Record<string, Decimal>`
+- `upgrades.levelsById: Record<string, number>`
 - `timestamps: { createdAt, lastSavedAt, lastTickAt }`
 - `log: string[]`
 
@@ -27,6 +28,7 @@
 - scaling config (`levelCostScaling`, `yieldScaling`, rates)
 - optional `reputationGate`
 - optional `unlockRequirements`
+- optional `requiresResearchUnlock`
 - optional `consumesPerSecond`
 - `usesComputeAllocation`
 
@@ -35,10 +37,46 @@
 `ResearchNodeDefinition` supports:
 
 - id/name/description
+- `path`: shared/whitehat/blackhat/greyhat
 - cost
 - prerequisites
 - optional reputation gate
+- optional `position`
 - config-driven effects
+
+## ResearchEffect
+
+- `resourceMultiplier`
+- `activityYieldMultiplier`
+- `computeEfficiencyMultiplier`
+- `reputationGainMultiplier`
+- `reputationLossMultiplier`
+- `activityUnlock`
+- `upgradeUnlock`
+
+## UpgradeDefinition
+
+- `id`, `name`, `description`
+- `scope`: `activity | path | global`
+- optional `activityId`
+- optional `path`
+- `cost: Partial<ResourceMap>`
+- `maxLevel: number`
+- `costScaling`, `costScalingRate`
+- `effects: UpgradeEffect[]`
+- optional `reputationGate`
+- optional `prerequisites`
+- optional `requiresResearchUnlock`
+
+## UpgradeEffect
+
+- `activityYieldMultiplier`
+- `activityCostMultiplier`
+- `computeEfficiencyMultiplier`
+- `reputationGainMultiplier`
+- `reputationLossMultiplier`
+
+Only effect types wired into gameplay this layer: `activityYieldMultiplier`, `computeEfficiencyMultiplier`.
 
 ## PrestigeLayer
 
@@ -70,5 +108,6 @@ Top-level save envelope:
 Decoded `payload` is `SerializedGameState`:
 
 - canonical `resources` as scientific strings
-- activities/research/prestige/allocations/timestamps
+- activities/research/prestige/allocations/upgrades/timestamps
 - `allocations.computeByActivityId` values as scientific strings
+- `upgrades.levelsById` values as integers

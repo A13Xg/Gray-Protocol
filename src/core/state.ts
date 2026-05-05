@@ -25,6 +25,7 @@ export function createInitialGameState(): GameState {
     research: { completed: new Set() },
     prestige: { layers: createInitialPrestigeLayers() },
     allocations: { computeByActivityId: {} },
+    upgrades: { levelsById: {} },
     timestamps: {
       createdAt: Date.now(),
       lastSavedAt: Date.now(),

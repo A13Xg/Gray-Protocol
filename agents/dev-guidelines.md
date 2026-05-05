@@ -7,10 +7,13 @@
 - Use `Decimal` for all game-scale values.
 - Use scientific-string serialization in save payloads.
 - Put balance in `src/core/config.ts`.
+- Keep upgrade progression level-based with deterministic multipliers.
+- Keep research progression graph-valid (no missing prereqs, self-deps, or cycles).
 
 ## Where to Add Features
 
 - Activities: `src/core/activities.ts` + config
+- Upgrades: `src/core/upgrades.ts` + config
 - Research: `src/core/research.ts` + config
 - Prestige: `src/core/prestige.ts` + config
 - Engine behavior: `src/core/engine.ts`
@@ -24,6 +27,9 @@
 - No persistence side-effects inside tick
 - Canonical key serialization compatibility
 - Legacy key migration path in persistence
+- Upgrade level persistence compatibility (`upgrades.levelsById`)
+- Combined multiplier ordering (activity base/level/compute then upgrades/research)
+- Research unlock integration (`activityUnlock`/`upgradeUnlock`) in shared helper paths
 
 ## Build / Typecheck Expectations
 

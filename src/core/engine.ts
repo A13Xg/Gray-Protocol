@@ -5,6 +5,7 @@ import type { GameState, ResourceKey } from "./types";
 import { addResourceMaps, applyResourceCost, canAffordResources, createEmptyResourceMap, subtractResourceMaps } from "./resources";
 import { ACTIVITY_DEFINITIONS, getActiveActivityDeltas } from "./activities";
 import { getResearchActivityYieldMultipliers, getResearchComputeEfficiencyMultiplier } from "./research";
+import { getUpgradeComputeEfficiencyMultiplier, getUpgradeYieldMultipliers } from "./upgrades";
 
 export type { ResourceKey };
 export type MultiCost = Partial<Record<ResourceKey, DecimalSource>>;
@@ -58,9 +59,17 @@ export function purchase(costs: MultiCost): boolean {
 
 export function tick(gs: GameState, deltaMs: number): void {
   const deltaSeconds = new Decimal(deltaMs).div(1000);
-  const researchMultipliers = getResearchActivityYieldMultipliers(gs);
-  const computeEfficiency = getResearchComputeEfficiencyMultiplier(gs);
-  const activityDeltas = getActiveActivityDeltas(gs, deltaSeconds, researchMultipliers, computeEfficiency);
+  // Yield multipliers order: base/level/compute in activity -> upgrades -> research.
+  const upgradeYieldMults = getUpgradeYieldMultipliers(gs);
+  const researchYieldMults = getResearchActivityYieldMultipliers(gs);
+  const combinedYieldMults: Record<string, Decimal> = { ...upgradeYieldMults };
+  for (const [actId, mult] of Object.entries(researchYieldMults)) {
+    combinedYieldMults[actId] = (combinedYieldMults[actId] ?? new Decimal(1)).mul(mult);
+  }
+  // Compute efficiency: research × upgrade
+  const combinedComputeEfficiency = getResearchComputeEfficiencyMultiplier(gs)
+    .mul(getUpgradeComputeEfficiencyMultiplier(gs));
+  const activityDeltas = getActiveActivityDeltas(gs, deltaSeconds, combinedYieldMults, combinedComputeEfficiency);
 
   for (const activityId of Object.keys(activityDeltas)) {
     const activityState = gs.activities[activityId];
@@ -157,7 +166,18 @@ export function tickPreview(gs: GameState, deltaMs: number): GameState {
     resources: createEmptyResourceMap(),
     activities: structuredClone(gs.activities),
     research: { completed: new Set(gs.research.completed) },
-    prestige: structuredClone(gs.prestige),
+    prestige: {
+      layers: Object.fromEntries(
+        Object.entries(gs.prestige.layers).map(([id, layer]) => [
+          id,
+          {
+            id: layer.id,
+            timesCompleted: layer.timesCompleted,
+            totalRewardsEarned: new Decimal(layer.totalRewardsEarned),
+          },
+        ])
+      ),
+    },
     allocations: {
       computeByActivityId: Object.fromEntries(
         Object.entries(gs.allocations.computeByActivityId).map(([id, value]) => [id, new Decimal(value)])

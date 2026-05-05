@@ -5,6 +5,7 @@ import { PRESTIGE_DEFINITIONS } from "./prestige";
 import { ALL_RESOURCE_KEYS } from "./resources";
 import { RESEARCH_DEFINITIONS } from "./research";
 import { isValidDecimal } from "./math";
+import { UPGRADE_DEFINITIONS } from "./upgrades";
 
 const SCIENTIFIC_OR_ZERO = /^-?(?:0|\d+(?:\.\d+)?e[+-]?\d+)$/i;
 
@@ -86,11 +87,205 @@ export function validateResearchId(id: string): ValidationResult {
   return success();
 }
 
+function detectResearchCycles(): string[] {
+  const cycles: string[] = [];
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const stack: string[] = [];
+
+  function dfs(nodeId: string): void {
+    if (visited.has(nodeId)) return;
+    if (visiting.has(nodeId)) {
+      const cycleStart = stack.indexOf(nodeId);
+      if (cycleStart >= 0) {
+        const cyclePath = [...stack.slice(cycleStart), nodeId].join(" -> ");
+        cycles.push(`Research cycle detected: ${cyclePath}`);
+      }
+      return;
+    }
+
+    visiting.add(nodeId);
+    stack.push(nodeId);
+
+    const def = RESEARCH_DEFINITIONS[nodeId];
+    if (def) {
+      for (const prerequisite of def.prerequisites) {
+        if (prerequisite in RESEARCH_DEFINITIONS) {
+          dfs(prerequisite);
+        }
+      }
+    }
+
+    stack.pop();
+    visiting.delete(nodeId);
+    visited.add(nodeId);
+  }
+
+  for (const nodeId of Object.keys(RESEARCH_DEFINITIONS)) {
+    dfs(nodeId);
+  }
+
+  return cycles;
+}
+
+export function validateResearchDefinitions(): ValidationResult {
+  const errors: string[] = [];
+  const ids = new Set<string>();
+  const defIds = new Set<string>();
+  const activityUnlockTargets = new Set<string>();
+  const upgradeUnlockTargets = new Set<string>();
+
+  for (const [nodeId, def] of Object.entries(RESEARCH_DEFINITIONS)) {
+    if (ids.has(nodeId)) {
+      errors.push(`Duplicate research key detected: ${nodeId}`);
+    }
+    ids.add(nodeId);
+
+    if (defIds.has(def.id)) {
+      errors.push(`Duplicate research id field detected: ${def.id}`);
+    }
+    defIds.add(def.id);
+
+    if (def.id !== nodeId) {
+      errors.push(`Research definition id mismatch: key=${nodeId}, id=${def.id}`);
+    }
+
+    for (const [resourceKey, costValue] of Object.entries(def.cost)) {
+      if (!ALL_RESOURCE_KEYS.includes(resourceKey as (typeof ALL_RESOURCE_KEYS)[number])) {
+        errors.push(`Research ${nodeId} cost uses invalid resource key: ${resourceKey}`);
+      }
+      if (!isValidDecimal(costValue)) {
+        errors.push(`Research ${nodeId} cost.${resourceKey} has invalid Decimal value`);
+      }
+    }
+
+    for (const prerequisite of def.prerequisites) {
+      if (prerequisite === nodeId) {
+        errors.push(`Research ${nodeId} cannot depend on itself`);
+      }
+      if (!(prerequisite in RESEARCH_DEFINITIONS)) {
+        errors.push(`Research ${nodeId} has missing prerequisite: ${prerequisite}`);
+      }
+    }
+
+    for (const effect of def.effects) {
+      if (!isValidDecimal(effect.value)) {
+        errors.push(`Research ${nodeId} effect ${effect.type} has invalid Decimal value`);
+      }
+
+      if (effect.type === "activityYieldMultiplier" || effect.type === "activityUnlock") {
+        if (!effect.target || !(effect.target in ACTIVITY_DEFINITIONS)) {
+          errors.push(`Research ${nodeId} effect ${effect.type} references invalid activity: ${String(effect.target)}`);
+        } else if (effect.type === "activityUnlock") {
+          activityUnlockTargets.add(effect.target);
+        }
+      }
+
+      if (effect.type === "upgradeUnlock") {
+        if (!effect.target || !(effect.target in UPGRADE_DEFINITIONS)) {
+          errors.push(`Research ${nodeId} effect upgradeUnlock references invalid upgrade: ${String(effect.target)}`);
+        } else {
+          upgradeUnlockTargets.add(effect.target);
+        }
+      }
+
+      if (effect.type === "resourceMultiplier") {
+        if (!effect.target || !ALL_RESOURCE_KEYS.includes(effect.target as (typeof ALL_RESOURCE_KEYS)[number])) {
+          errors.push(`Research ${nodeId} effect resourceMultiplier uses invalid resource key: ${String(effect.target)}`);
+        }
+      }
+    }
+  }
+
+  for (const [activityId, def] of Object.entries(ACTIVITY_DEFINITIONS)) {
+    if (def.requiresResearchUnlock && !activityUnlockTargets.has(activityId)) {
+      errors.push(`Activity ${activityId} requires research unlock but no activityUnlock effect targets it`);
+    }
+  }
+
+  for (const [upgradeId, def] of Object.entries(UPGRADE_DEFINITIONS)) {
+    if (def.requiresResearchUnlock && !upgradeUnlockTargets.has(upgradeId)) {
+      errors.push(`Upgrade ${upgradeId} requires research unlock but no upgradeUnlock effect targets it`);
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+export function validateResearchGraph(): ValidationResult {
+  const cycleErrors = detectResearchCycles();
+  return { valid: cycleErrors.length === 0, errors: cycleErrors };
+}
+
 export function validatePrestigeId(id: string): ValidationResult {
   if (!(id in PRESTIGE_DEFINITIONS)) {
     return { valid: false, errors: [`Unknown prestige id: ${id}`] };
   }
   return success();
+}
+
+export function validateUpgradeId(id: string): ValidationResult {
+  if (!(id in UPGRADE_DEFINITIONS)) {
+    return { valid: false, errors: [`Unknown upgrade id: ${id}`] };
+  }
+  return success();
+}
+
+export function validateUpgradeDefinitions(): ValidationResult {
+  const errors: string[] = [];
+
+  for (const [upgradeId, def] of Object.entries(UPGRADE_DEFINITIONS)) {
+    if (def.maxLevel <= 0) {
+      errors.push(`Upgrade ${upgradeId} maxLevel must be > 0`);
+    }
+
+    if (!isValidDecimal(def.costScalingRate)) {
+      errors.push(`Upgrade ${upgradeId} has invalid costScalingRate`);
+    }
+
+    if (def.scope === "activity") {
+      if (!def.activityId) {
+        errors.push(`Upgrade ${upgradeId} has scope=activity but no activityId`);
+      } else if (!(def.activityId in ACTIVITY_DEFINITIONS)) {
+        errors.push(`Upgrade ${upgradeId} references unknown activityId ${def.activityId}`);
+      }
+    }
+
+    if (def.scope === "path" && !def.path) {
+      errors.push(`Upgrade ${upgradeId} has scope=path but no path`);
+    }
+
+    if (def.prerequisites) {
+      for (const prerequisite of def.prerequisites) {
+        if (!(prerequisite in UPGRADE_DEFINITIONS)) {
+          errors.push(`Upgrade ${upgradeId} has unknown prerequisite ${prerequisite}`);
+        }
+      }
+    }
+
+    for (const [key, amount] of Object.entries(def.cost)) {
+      if (!ALL_RESOURCE_KEYS.includes(key as (typeof ALL_RESOURCE_KEYS)[number])) {
+        errors.push(`Upgrade ${upgradeId} cost uses invalid resource key ${key}`);
+      }
+      if (!isValidDecimal(amount)) {
+        errors.push(`Upgrade ${upgradeId} cost.${key} has invalid Decimal value`);
+      }
+    }
+
+    for (const effect of def.effects) {
+      if (!isValidDecimal(effect.value)) {
+        errors.push(`Upgrade ${upgradeId} effect ${effect.type} has invalid Decimal value`);
+      }
+
+      if (effect.type === "activityYieldMultiplier" && def.scope === "activity" && def.activityId) {
+        if (!(def.activityId in ACTIVITY_DEFINITIONS)) {
+          errors.push(`Upgrade ${upgradeId} activityYieldMultiplier references unknown activity ${def.activityId}`);
+        }
+      }
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
 }
 
 export function validateAllocationTotals(state: GameState): ValidationResult {
@@ -120,6 +315,15 @@ export function validateAllocationTotals(state: GameState): ValidationResult {
 export function validateGameState(state: GameState): ValidationResult {
   const errors: string[] = [];
 
+  const researchDefinitionsValidation = validateResearchDefinitions();
+  if (!researchDefinitionsValidation.valid) errors.push(...researchDefinitionsValidation.errors);
+
+  const researchGraphValidation = validateResearchGraph();
+  if (!researchGraphValidation.valid) errors.push(...researchGraphValidation.errors);
+
+  const upgradeDefinitionValidation = validateUpgradeDefinitions();
+  if (!upgradeDefinitionValidation.valid) errors.push(...upgradeDefinitionValidation.errors);
+
   const resourceValidation = validateResourceMap(state.resources);
   if (!resourceValidation.valid) errors.push(...resourceValidation.errors);
 
@@ -136,6 +340,18 @@ export function validateGameState(state: GameState): ValidationResult {
   for (const prestigeId of Object.keys(state.prestige.layers)) {
     const prestigeValidation = validatePrestigeId(prestigeId);
     if (!prestigeValidation.valid) errors.push(...prestigeValidation.errors);
+  }
+
+  for (const [upgradeId, level] of Object.entries(state.upgrades.levelsById)) {
+    const upgradeValidation = validateUpgradeId(upgradeId);
+    if (!upgradeValidation.valid) {
+      errors.push(...upgradeValidation.errors);
+      continue;
+    }
+    const def = UPGRADE_DEFINITIONS[upgradeId];
+    if (level < 0 || level > def.maxLevel) {
+      errors.push(`Upgrade ${upgradeId} level ${level} is out of bounds [0, ${def.maxLevel}]`);
+    }
   }
 
   const allocationValidation = validateAllocationTotals(state);
@@ -183,6 +399,22 @@ export function validateSerializedGameState(serialized: unknown): ValidationResu
       `prestigeLayers.${layerId}.totalRewardsEarned`
     );
     if (!scientificValidation.valid) errors.push(...scientificValidation.errors);
+  }
+
+  for (const [upgradeId, level] of Object.entries(payload.upgrades?.levelsById ?? {})) {
+    if (!(upgradeId in UPGRADE_DEFINITIONS)) {
+      errors.push(`upgrades has unknown id: ${upgradeId}`);
+      continue;
+    }
+    if (typeof level !== "number" || !Number.isInteger(level) || level < 0) {
+      errors.push(`upgrades.${upgradeId} level must be a non-negative integer`);
+    }
+  }
+
+  for (const nodeId of payload.researchCompleted ?? []) {
+    if (!(nodeId in RESEARCH_DEFINITIONS)) {
+      errors.push(`researchCompleted has unknown id: ${nodeId}`);
+    }
   }
 
   return { valid: errors.length === 0, errors };

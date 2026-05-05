@@ -5,6 +5,8 @@ import type { GameState, SaveFile, SerializedGameState, SerializedResourceMap } 
 import { deserializeDecimal, deserializeResourceMap, serializeDecimal, serializeResourceMap } from "./math";
 import { repairResourceMap } from "./resources";
 import { validateSaveFile, validateSerializedGameState } from "./validation";
+import { UPGRADE_DEFINITIONS } from "./upgrades";
+import { RESEARCH_DEFINITIONS } from "./research";
 
 const SAVE_KEY = "gray_protocol_save_v3";
 const LEGACY_SAVE_KEYS = ["gray_protocol_save_v2"];
@@ -52,6 +54,9 @@ function serializeState(gs: GameState): SerializedGameState {
           serializeDecimal(amount),
         ])
       ),
+    },
+    upgrades: {
+      levelsById: { ...gs.upgrades.levelsById },
     },
     timestamps: {
       ...gs.timestamps,
@@ -108,15 +113,31 @@ function repairSerializedState(raw: SerializedGameState): SerializedGameState {
       reputation: serializeDecimal(deserializeDecimal(repairedResources.reputation)),
     },
     activities: raw.activities ?? {},
-    researchCompleted: Array.isArray(raw.researchCompleted) ? raw.researchCompleted : [],
+    researchCompleted: Array.isArray(raw.researchCompleted)
+      ? raw.researchCompleted.filter((id) => typeof id === "string" && id in RESEARCH_DEFINITIONS)
+      : [],
     prestigeLayers: raw.prestigeLayers ?? {},
     allocations: { computeByActivityId: repairedAllocations },
+    upgrades: {
+      levelsById: repairUpgradeLevels(raw.upgrades?.levelsById),
+    },
     timestamps: {
       createdAt: raw.timestamps?.createdAt ?? Date.now(),
       lastSavedAt: raw.timestamps?.lastSavedAt ?? Date.now(),
       lastTickAt: raw.timestamps?.lastTickAt ?? Date.now(),
     },
   };
+}
+function repairUpgradeLevels(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== "object") return {};
+  const result: Record<string, number> = {};
+  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!(id in UPGRADE_DEFINITIONS)) continue;
+    const level = typeof value === "number" ? Math.floor(value) : 0;
+    const def = UPGRADE_DEFINITIONS[id];
+    result[id] = Math.max(0, Math.min(level, def.maxLevel));
+  }
+  return result;
 }
 
 function deserializeState(serialized: SerializedGameState, target: GameState): void {
@@ -145,6 +166,8 @@ function deserializeState(serialized: SerializedGameState, target: GameState): v
       deserializeDecimal(amount),
     ])
   );
+
+  target.upgrades.levelsById = { ...repaired.upgrades.levelsById };
 
   target.timestamps = {
     ...repaired.timestamps,

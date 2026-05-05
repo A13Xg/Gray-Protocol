@@ -7,4 +7,7 @@
 - Core engine modules must remain headless (no DOM/Vue dependencies inside core logic functions).
 - `tick` must not perform persistence side effects.
 - Engine behavior must remain deterministic for identical state + `deltaMs` inputs.
-- Validation must enforce payload integrity, canonical keys, ID validity, Decimal validity, and allocation constraints.
+- Activity and upgrade systems must remain config-driven.
+- Research tree definitions and progression must remain config-driven.
+- Upgrade state is level-based: `state.upgrades.levelsById` (integers, bounded by definition max level).
+- Validation must enforce payload integrity, canonical keys, ID validity, Decimal validity, allocation constraints, upgrade level bounds, and research graph integrity.
