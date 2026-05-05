@@ -77,7 +77,7 @@ export function tick(gs: GameState, deltaMs: number): void {
     // Apply costs/consumption
     for (const [key, amount] of Object.entries(delta.costs)) {
       const rk = key as ResourceKey;
-      const cost = new Decimal(amount as Decimal);
+      const cost = new Decimal(amount);
       if (cost.gt(0)) {
         if (gs.resources[rk].lt(cost)) {
           // Can't afford consumption, deactivate
