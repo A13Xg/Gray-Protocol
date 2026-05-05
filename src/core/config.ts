@@ -33,7 +33,7 @@ export const GAME_CONFIG = {
 
   activities: {
     basicCryptoMining: {
-      baseCost: { compute: new Decimal(1) },
+      baseCost: { money: new Decimal(1) },
       baseYieldPerSecond: { crypto: new Decimal(0.5) },
       levelCostScaling: "exponential" as const,
       yieldScaling: "linear" as const,
@@ -52,9 +52,8 @@ export const GAME_CONFIG = {
       reputationGate: { min: new Decimal(-100) },
     },
     passwordCracking: {
-      baseCost: { compute: new Decimal(2) },
+      baseCost: { money: new Decimal(2) },
       baseYieldPerSecond: { money: new Decimal(1), crypto: new Decimal(0.3), reputation: new Decimal(-0.2) },
-      consumesPerSecond: { compute: new Decimal(0.01) },
       levelCostScaling: "exponential" as const,
       yieldScaling: "linear" as const,
       costScalingRate: new Decimal(1.18),
@@ -63,7 +62,7 @@ export const GAME_CONFIG = {
       reputationGate: { max: new Decimal(100) },
     },
     computeLeasing: {
-      baseCost: { compute: new Decimal(3) },
+      baseCost: { money: new Decimal(3) },
       baseYieldPerSecond: { money: new Decimal(1.5) },
       actionUnlockRequirements: { scanNetwork: 5 },
       levelCostScaling: "exponential" as const,
@@ -94,7 +93,7 @@ export const GAME_CONFIG = {
       reputationGate: { min: new Decimal(0) },
     },
     threatIntelAnalysis: {
-      baseCost: { money: new Decimal(30), compute: new Decimal(5) },
+      baseCost: { money: new Decimal(30) },
       baseYieldPerSecond: { money: new Decimal(5), reputation: new Decimal(0.5) },
       levelCostScaling: "exponential" as const,
       yieldScaling: "linear" as const,
@@ -132,14 +131,14 @@ export const GAME_CONFIG = {
   research: {
     parallelProcessing: {
       path: "shared" as const,
-      cost: { compute: new Decimal(20) },
+      cost: { money: new Decimal(20) },
       prerequisites: [] as string[],
       position: { x: 0, y: 0 },
       effects: [{ type: "computeEfficiencyMultiplier" as const, value: new Decimal(1.2) }],
     },
     distributedSchedulers: {
       path: "shared" as const,
-      cost: { compute: new Decimal(40), money: new Decimal(30) },
+      cost: { money: new Decimal(30) },
       prerequisites: ["parallelProcessing"] as string[],
       position: { x: 1, y: 0 },
       effects: [
@@ -149,7 +148,7 @@ export const GAME_CONFIG = {
     },
     protocolOptimization: {
       path: "shared" as const,
-      cost: { compute: new Decimal(80), crypto: new Decimal(20) },
+      cost: { crypto: new Decimal(20) },
       prerequisites: ["distributedSchedulers"] as string[],
       position: { x: 2, y: 0 },
       effects: [
@@ -170,7 +169,7 @@ export const GAME_CONFIG = {
     },
     defensiveAutomation: {
       path: "whitehat" as const,
-      cost: { money: new Decimal(120), compute: new Decimal(30) },
+      cost: { money: new Decimal(120) },
       prerequisites: ["responsibleDisclosure"] as string[],
       reputationGate: { min: new Decimal(25) },
       position: { x: 1, y: 1 },
@@ -181,7 +180,7 @@ export const GAME_CONFIG = {
     },
     trustedResearchNetwork: {
       path: "whitehat" as const,
-      cost: { money: new Decimal(250), compute: new Decimal(80) },
+      cost: { money: new Decimal(250) },
       prerequisites: ["defensiveAutomation"] as string[],
       reputationGate: { alignment: "whitehat" as const },
       position: { x: 2, y: 1 },
@@ -203,7 +202,7 @@ export const GAME_CONFIG = {
     },
     distributedIntrusionTooling: {
       path: "blackhat" as const,
-      cost: { crypto: new Decimal(35), compute: new Decimal(25) },
+      cost: { crypto: new Decimal(35) },
       prerequisites: ["exploitAutomation"] as string[],
       reputationGate: { max: new Decimal(-25) },
       position: { x: 1, y: 2 },
@@ -290,7 +289,7 @@ export const GAME_CONFIG = {
     passwordAttempt: {
       type: "instant" as const,
       path: "blackhat" as const,
-      baseCost: { compute: new Decimal(0.2) },
+      baseCost: {},
       baseReward: { money: new Decimal(8), crypto: new Decimal(1.5) },
       reputationEffect: new Decimal(-0.35),
       successChance: new Decimal(0.52),
@@ -345,14 +344,14 @@ export const GAME_CONFIG = {
     firstActivityLevel: {
       type: "activityLevel" as const,
       requirement: { activityId: "basicCryptoMining", level: 1 },
-      reward: { money: new Decimal(30), compute: new Decimal(2) },
+      reward: { money: new Decimal(30) },
       recommended: true,
       pathHint: "shared" as const,
     },
     firstUpgrade: {
       type: "researchCompletion" as const,
       requirement: { researchId: "parallelProcessing" },
-      reward: { compute: new Decimal(5) },
+      reward: { money: new Decimal(5) },
       recommended: true,
       pathHint: "shared" as const,
     },
@@ -362,7 +361,7 @@ export const GAME_CONFIG = {
     miningFirmwareOptimization: {
       scope: "activity" as const,
       activityId: "basicCryptoMining",
-      cost: { compute: new Decimal(5) },
+      cost: { money: new Decimal(5) },
       costScaling: "exponential" as const,
       costScalingRate: new Decimal(1.5),
       maxLevel: 3,
@@ -389,7 +388,7 @@ export const GAME_CONFIG = {
     indexCompression: {
       scope: "activity" as const,
       activityId: "dataIndexing",
-      cost: { compute: new Decimal(8) },
+      cost: { money: new Decimal(8) },
       costScaling: "exponential" as const,
       costScalingRate: new Decimal(1.5),
       maxLevel: 2,
@@ -472,7 +471,7 @@ export const GAME_CONFIG = {
     },
     encryptedChannels: {
       scope: "global" as const,
-      cost: { compute: new Decimal(15) },
+      cost: { money: new Decimal(15) },
       costScaling: "exponential" as const,
       costScalingRate: new Decimal(2),
       maxLevel: 3,

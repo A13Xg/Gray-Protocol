@@ -44,7 +44,6 @@ export const ACTIVITY_DEFINITIONS: Record<string, ActivityDefinition> = {
     description: "Extract value from compromised targets while harming reputation.",
     baseCost: GAME_CONFIG.activities.passwordCracking.baseCost,
     baseYieldPerSecond: GAME_CONFIG.activities.passwordCracking.baseYieldPerSecond,
-    consumesPerSecond: GAME_CONFIG.activities.passwordCracking.consumesPerSecond,
     costScalingRate: GAME_CONFIG.activities.passwordCracking.costScalingRate,
     yieldScalingRate: GAME_CONFIG.activities.passwordCracking.yieldScalingRate,
     levelCostScaling: GAME_CONFIG.activities.passwordCracking.levelCostScaling,
@@ -314,7 +313,9 @@ export function calculateActivityDelta(
 
   if (def.consumesPerSecond) {
     for (const [key, value] of Object.entries(def.consumesPerSecond) as Array<[ResourceKey, Decimal]>) {
-      costs[key] = costs[key].add(value.mul(deltaSeconds));
+      if (key !== "compute") {
+        costs[key] = costs[key].add(value.mul(deltaSeconds));
+      }
     }
   }
 

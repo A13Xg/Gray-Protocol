@@ -64,6 +64,7 @@ export function multiplyResourceMap(map: ResourceMap, multiplier: Decimal): Reso
 
 export function canAffordResources(resources: ResourceMap, cost: Partial<ResourceMap>): boolean {
   for (const key of ALL_RESOURCE_KEYS) {
+    if (key === "compute") continue;
     const c = cost[key];
     if (c !== undefined && new Decimal(c).gt(0) && resources[key].lt(c)) return false;
   }
@@ -74,7 +75,13 @@ export function applyResourceCost(resources: ResourceMap, cost: Partial<Resource
   if (!canAffordResources(resources, cost)) {
     throw new Error("Cannot afford resource cost");
   }
-  return subtractResourceMaps(resources, cost);
+  const safeC: Partial<ResourceMap> = {};
+  for (const [key, value] of Object.entries(cost) as Array<[ResourceKey, Decimal]>) {
+    if (key !== "compute") {
+      safeC[key] = value;
+    }
+  }
+  return subtractResourceMaps(resources, safeC);
 }
 
 export function validateResourceMap(map: Partial<ResourceMap>): boolean {

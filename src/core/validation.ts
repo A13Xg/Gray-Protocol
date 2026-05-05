@@ -156,6 +156,9 @@ export function validateResearchDefinitions(): ValidationResult {
       if (!ALL_RESOURCE_KEYS.includes(resourceKey as (typeof ALL_RESOURCE_KEYS)[number])) {
         errors.push(`Research ${nodeId} cost uses invalid resource key: ${resourceKey}`);
       }
+      if (resourceKey === "compute") {
+        errors.push(`Research ${nodeId} cost uses compute; compute is allocation-only and cannot be spent`);
+      }
       if (!isValidDecimal(costValue)) {
         errors.push(`Research ${nodeId} cost.${resourceKey} has invalid Decimal value`);
       }
@@ -240,6 +243,43 @@ export function validateActionId(id: string): ValidationResult {
   return success();
 }
 
+export function validateActivityDefinitions(): ValidationResult {
+  const errors: string[] = [];
+
+  for (const [activityId, def] of Object.entries(ACTIVITY_DEFINITIONS)) {
+    // Check baseCost for compute
+    for (const [key, amount] of Object.entries(def.baseCost)) {
+      if (key === "compute") {
+        errors.push(`Activity ${activityId} baseCost uses compute, which is allocation-only and cannot be spent`);
+      }
+      if (!isValidDecimal(amount)) {
+        errors.push(`Activity ${activityId} baseCost.${key} has invalid Decimal value`);
+      }
+    }
+
+    // Check consumesPerSecond for compute
+    if (def.consumesPerSecond) {
+      for (const [key, amount] of Object.entries(def.consumesPerSecond)) {
+        if (key === "compute") {
+          errors.push(`Activity ${activityId} consumesPerSecond uses compute, which is allocation-only and cannot be spent`);
+        }
+        if (!isValidDecimal(amount)) {
+          errors.push(`Activity ${activityId} consumesPerSecond.${key} has invalid Decimal value`);
+        }
+      }
+    }
+
+    // Check baseYieldPerSecond for valid decimals
+    for (const [key, amount] of Object.entries(def.baseYieldPerSecond)) {
+      if (!isValidDecimal(amount)) {
+        errors.push(`Activity ${activityId} baseYieldPerSecond.${key} has invalid Decimal value`);
+      }
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
 export function validateTaskId(id: string): ValidationResult {
   if (!(id in TASK_DEFINITIONS)) {
     return { valid: false, errors: [`Unknown task id: ${id}`] };
@@ -282,6 +322,9 @@ export function validateUpgradeDefinitions(): ValidationResult {
     for (const [key, amount] of Object.entries(def.cost)) {
       if (!ALL_RESOURCE_KEYS.includes(key as (typeof ALL_RESOURCE_KEYS)[number])) {
         errors.push(`Upgrade ${upgradeId} cost uses invalid resource key ${key}`);
+      }
+      if (key === "compute") {
+        errors.push(`Upgrade ${upgradeId} cost uses compute, which is allocation-only and cannot be spent`);
       }
       if (!isValidDecimal(amount)) {
         errors.push(`Upgrade ${upgradeId} cost.${key} has invalid Decimal value`);
@@ -339,6 +382,9 @@ export function validateGameState(state: GameState): ValidationResult {
 
   const upgradeDefinitionValidation = validateUpgradeDefinitions();
   if (!upgradeDefinitionValidation.valid) errors.push(...upgradeDefinitionValidation.errors);
+
+  const activityDefinitionValidation = validateActivityDefinitions();
+  if (!activityDefinitionValidation.valid) errors.push(...activityDefinitionValidation.errors);
 
   const resourceValidation = validateResourceMap(state.resources);
   if (!resourceValidation.valid) errors.push(...resourceValidation.errors);

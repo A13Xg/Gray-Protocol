@@ -354,3 +354,6 @@ export function runSimulation(): void {
 
   console.log("=== Simulation Complete ===");
 }
+
+// Run simulation immediately if this module is executed directly
+runSimulation();

@@ -41,6 +41,29 @@ Canonical resource keys only: money, crypto, compute, reputation.
 
 All runtime resource values are Decimal.
 
+**Compute is a pool resource (not consumable)**:
+- Compute has a cap that increases only through prestige layer completion
+- Compute is never spent/subtracted from total resources
+- Compute can be allocated to activities via `allocations.computeByActivityId`
+- Allocation is a reservation mechanism: declaring "X compute is dedicated to activity Y"
+- Free compute = total compute - sum of allocations
+- Activities can scale yields based on their compute allocation without consuming it
+- Costs for activities, research, upgrades, and actions never include compute
+- Validation prevents any compute costs from being added to config
+
+**Money and Crypto are consumable resources**:
+- Can be spent on activities (baseCost)
+- Can be spent on research (cost)
+- Can be spent on upgrades (cost)
+- Can be spent on actions (cost)
+- Consumed as activity maintenance (consumesPerSecond)
+- All resource application subtracts from these pools
+
+**Reputation is a signed additive resource**:
+- Affected by actions and activities
+- Used for path gating (alignment-based access)
+- Never directly consumed, only modified upward/downward
+
 ## Numeric / Scientific Storage Model
 
 - Runtime math uses Decimal (break_eternity.js)
@@ -124,15 +147,31 @@ Defined but not yet used in content:
 
 Advanced upgrades can opt into research-based unlock gating via `requiresResearchUnlock`, resolved through active `upgradeUnlock` research effects.
 
-## Compute Allocation
+## Compute Allocation (Pool-Based Model)
 
-State path:
-- allocations.computeByActivityId: Record<string, Decimal>
+**Storage**:
+- `state.resources.compute`: Total compute pool (cap)
+- `allocations.computeByActivityId`: Record<string, Decimal> for reservations
 
-Behavior:
-- setComputeAllocation clamps to available compute
-- activities with usesComputeAllocation apply multiplier: allocatedCompute * computeEfficiency + 1
-- compute efficiency combines research and upgrades multiplicatively
+**Semantics**:
+- Compute is created only at game start (initial 10) or via prestige layer completion
+- Allocating compute to an activity is a reservation: "dedicate X of my compute cap to Y"
+- Total allocation cannot exceed total compute (validated by `validateAllocationTotals`)
+- Compute never decreases through resource costs or activity consumption
+- Prestige can increase compute permanently and irreversibly
+
+**Activity Usage**:
+- Activities with `usesComputeAllocation: true` apply compute scaling multiplier
+- Multiplier formula: `allocatedCompute * computeEfficiency + 1`
+- Example: if activity has 3 compute allocated and computeEfficiency is 0.5, multiplier = 3 * 0.5 + 1 = 2.5x
+- Compute efficiency is aggregated from research and upgrade effects
+
+**Validation**:
+- Cannot appear in any baseCost for activities, research, or upgrades
+- Cannot appear in consumesPerSecond for activities
+- Cannot be offered as reward in tasks or actions
+- Only prestige can create new compute
+- All config validates via `validateActivityDefinitions()`, `validateResearchDefinitions()`, `validateUpgradeDefinitions()`
 
 ## Tick Yield Order
 

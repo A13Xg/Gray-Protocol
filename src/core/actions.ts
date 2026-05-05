@@ -58,7 +58,7 @@ export const ACTION_DEFINITIONS: Record<string, ManualActionDefinition> = {
     description: "Attempt a credential crack. Success is probabilistic and reputation is harmed.",
     type: GAME_CONFIG.actions.passwordAttempt.type,
     path: GAME_CONFIG.actions.passwordAttempt.path,
-    baseCost: GAME_CONFIG.actions.passwordAttempt.baseCost,
+    baseCost: {},
     baseReward: GAME_CONFIG.actions.passwordAttempt.baseReward,
     reputationEffect: GAME_CONFIG.actions.passwordAttempt.reputationEffect,
     successChance: GAME_CONFIG.actions.passwordAttempt.successChance,
@@ -72,6 +72,7 @@ export const ACTION_DEFINITIONS: Record<string, ManualActionDefinition> = {
 
 function sanitizeResourceDelta(key: ResourceKey, value: Decimal): Decimal {
   if (!value.isFinite() || Decimal.isNaN(value)) return new Decimal(0);
+  if (key === "compute") return new Decimal(0);
   if (key !== "reputation" && value.lt(0)) return new Decimal(0);
   return value;
 }
@@ -220,17 +221,10 @@ function applyReward(state: GameState, reward: Partial<Record<ResourceKey, Decim
   }
 }
 
-function hasFreeComputeForAction(state: GameState, action: ManualActionDefinition): boolean {
-  const computeCost = action.baseCost.compute;
-  if (!computeCost || computeCost.lte(0)) return true;
-  return getFreeCompute(state).gte(computeCost);
-}
-
 export function canExecuteAction(state: GameState, actionId: string): boolean {
   const action = ACTION_DEFINITIONS[actionId];
   if (!action) return false;
   if (!canAffordResources(state.resources, action.baseCost)) return false;
-  if (!hasFreeComputeForAction(state, action)) return false;
 
   const cooldownMs = action.cooldownMs ?? 0;
   if (cooldownMs <= 0) return true;
