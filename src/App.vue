@@ -9,11 +9,12 @@ import {
   startGameLoop,
   stopGameLoop,
 } from "./core/engine";
-import { saveGame, loadGame, exportSave, importSave } from "./core/persistence";
+import { saveGame, loadGame, exportSave, importSave, forceDeleteAllSavedData, hasSavedData } from "./core/persistence";
 import { format } from "./utils/formatter";
 import { ACTIVITY_DEFINITIONS, canUnlockActivity, purchaseActivityLevel } from "./core/activities";
 import { UPGRADE_DEFINITIONS, canPurchaseUpgrade, getUpgradeCost, getUpgradeLevel, purchaseUpgrade } from "./core/upgrades";
 import { canResearchNode, purchaseResearchNode, RESEARCH_DEFINITIONS } from "./core/research";
+import { validateGameState } from "./core/validation";
 import { ACTION_DEFINITIONS, canExecuteAction, executeAction } from "./core/actions";
 import {
   canClaimTask,
@@ -46,6 +47,7 @@ const researchIds = Object.keys(RESEARCH_DEFINITIONS);
 const actionIds = Object.keys(ACTION_DEFINITIONS);
 const taskIds = Object.keys(TASK_DEFINITIONS);
 const lastActionOutcome = ref<string>("");
+const debugMessage = ref<string>("");
 
 function buyLevel(activityId: string): void {
   purchaseActivityLevel(state, activityId);
@@ -183,6 +185,30 @@ function taskStatus(taskId: string): string {
 }
 
 const recommendedTasks = computed(() => getRecommendedTasks(state));
+const claimedTaskCount = computed(() => Object.values(state.tasks.claimedById).filter((claimed) => claimed).length);
+const totalActionExecutions = computed(() => state.manualActions.totalExecutions);
+const hasAnySavedData = computed(() => hasSavedData());
+
+function runStateValidation(): void {
+  const result = validateGameState(state);
+  debugMessage.value = result.valid
+    ? "Runtime state validation passed"
+    : `Runtime state validation failed: ${result.errors.join(" | ")}`;
+}
+
+function forceDeleteData(): void {
+  const firstConfirm = window.confirm("Force delete all saved data and reset the run?");
+  if (!firstConfirm) return;
+  const secondConfirm = window.prompt('Type DELETE to confirm destructive reset');
+  if (secondConfirm !== "DELETE") {
+    debugMessage.value = "Force delete cancelled (confirmation text mismatch)";
+    return;
+  }
+  forceDeleteAllSavedData();
+  importInput.value = "";
+  lastActionOutcome.value = "";
+  debugMessage.value = "All saved data deleted and runtime state reset";
+}
 </script>
 
 <template>
@@ -297,6 +323,26 @@ const recommendedTasks = computed(() => getRecommendedTasks(state));
         <button @click="onImport">Import</button>
       </div>
       <textarea v-model="importInput" rows="3" placeholder="Paste exported save here" />
+    </section>
+
+    <section class="card">
+      <h2>Debug</h2>
+      <details class="debug-menu">
+        <summary>Open Debug Menu</summary>
+        <div class="debug-grid">
+          <div class="row"><span>Saved data present</span><strong>{{ hasAnySavedData ? "Yes" : "No" }}</strong></div>
+          <div class="row"><span>Total action executions</span><strong>{{ totalActionExecutions }}</strong></div>
+          <div class="row"><span>Claimed tasks</span><strong>{{ claimedTaskCount }}</strong></div>
+          <div class="row"><span>Allocated compute</span><strong>{{ fmtComputeUsed }}</strong></div>
+          <div class="row"><span>Log entries</span><strong>{{ state.log.length }}</strong></div>
+          <div class="row"><span>Last saved timestamp</span><strong>{{ new Date(state.timestamps.lastSavedAt).toLocaleString() }}</strong></div>
+        </div>
+        <div class="controls">
+          <button @click="runStateValidation">Validate Runtime State</button>
+          <button class="danger" @click="forceDeleteData">Force Delete All Saved Data</button>
+        </div>
+        <div v-if="debugMessage" class="muted">{{ debugMessage }}</div>
+      </details>
     </section>
 
     <section class="card">
@@ -498,6 +544,20 @@ textarea {
 
 .muted {
   opacity: 0.6;
+}
+
+.debug-menu {
+  font-size: 12px;
+}
+
+.debug-grid {
+  margin: 8px 0;
+}
+
+.danger {
+  border-color: #8f3d3d;
+  background: #2e1414;
+  color: #ffcccc;
 }
 
 @media (max-width: 640px) {

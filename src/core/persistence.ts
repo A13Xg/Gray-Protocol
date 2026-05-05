@@ -339,3 +339,32 @@ export function previewSerializedState(gs: GameState): SerializedGameState {
 export function serializeDecimalForDebug(value: Decimal): string {
   return serializeDecimal(value);
 }
+
+function applyFreshState(target: GameState): void {
+  const fresh = createInitialGameState();
+  target.version = fresh.version;
+  target.resources = fresh.resources;
+  target.activities = fresh.activities;
+  target.research = fresh.research;
+  target.prestige = fresh.prestige;
+  target.allocations = fresh.allocations;
+  target.upgrades = fresh.upgrades;
+  target.manualActions = fresh.manualActions;
+  target.tasks = fresh.tasks;
+  target.timestamps = fresh.timestamps;
+  target.log = fresh.log;
+}
+
+export function hasSavedData(): boolean {
+  if (localStorage.getItem(SAVE_KEY)) return true;
+  return LEGACY_SAVE_KEYS.some((key) => localStorage.getItem(key) !== null);
+}
+
+export function forceDeleteAllSavedData(): void {
+  localStorage.removeItem(SAVE_KEY);
+  for (const legacyKey of LEGACY_SAVE_KEYS) {
+    localStorage.removeItem(legacyKey);
+  }
+  applyFreshState(state);
+  pushLog("All saved data was force deleted and game state was reset");
+}
