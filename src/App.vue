@@ -12,7 +12,7 @@ import {
 import { saveGame, loadGame, exportSave, importSave } from "./core/persistence";
 import { format } from "./utils/formatter";
 import { ACTIVITY_DEFINITIONS, canUnlockActivity, purchaseActivityLevel } from "./core/activities";
-import { UPGRADE_DEFINITIONS, canPurchaseUpgrade, getUpgradeLevel, purchaseUpgrade } from "./core/upgrades";
+import { UPGRADE_DEFINITIONS, canPurchaseUpgrade, getUpgradeCost, getUpgradeLevel, purchaseUpgrade } from "./core/upgrades";
 import { canResearchNode, purchaseResearchNode, RESEARCH_DEFINITIONS } from "./core/research";
 import { ACTION_DEFINITIONS, canExecuteAction, executeAction } from "./core/actions";
 import {
@@ -97,6 +97,37 @@ function canBuyUpgrade(upgradeId: string): boolean {
 
 function buyUpgrade(upgradeId: string): void {
   purchaseUpgrade(state, upgradeId);
+}
+
+function upgradeCostLabel(upgradeId: string): string {
+  const level = getUpgradeLevel(state, upgradeId);
+  const cost = getUpgradeCost(upgradeId, level);
+  const parts: string[] = [];
+  for (const [resource, amount] of Object.entries(cost)) {
+    parts.push(`${resource}: ${format(amount as Decimal)}`);
+  }
+  return parts.length > 0 ? parts.join(" | ") : "No cost";
+}
+
+function upgradeStatusLabel(upgradeId: string): string {
+  const level = getUpgradeLevel(state, upgradeId);
+  const def = UPGRADE_DEFINITIONS[upgradeId];
+  if (!def) return "Unknown";
+  if (level >= def.maxLevel) return "Maxed";
+  return canBuyUpgrade(upgradeId) ? "Affordable" : "Unavailable";
+}
+
+function upgradeMetaLabel(upgradeId: string): string {
+  const def = UPGRADE_DEFINITIONS[upgradeId];
+  if (!def) return "";
+  const scopeLabel = `scope: ${def.scope}`;
+  const activityLabel = def.activityId
+    ? `activity: ${ACTIVITY_DEFINITIONS[def.activityId]?.name ?? def.activityId}`
+    : "global";
+  const gates: string[] = [];
+  if (def.reputationGate) gates.push("rep gate");
+  if (def.requiresResearchUnlock) gates.push("research unlock");
+  return [scopeLabel, activityLabel, ...gates].join(" | ");
 }
 
 function isResearchCompleted(nodeId: string): boolean {
@@ -202,11 +233,14 @@ const recommendedTasks = computed(() => getRecommendedTasks(state));
         <div class="upgrade-row">
           <span class="upgrade-name">{{ UPGRADE_DEFINITIONS[upgradeId].name }}</span>
           <span class="upgrade-level">{{ upgradeLevel(upgradeId) }} / {{ UPGRADE_DEFINITIONS[upgradeId].maxLevel }}</span>
+          <span class="upgrade-status">{{ upgradeStatusLabel(upgradeId) }}</span>
           <button
             :disabled="!canBuyUpgrade(upgradeId)"
             @click="buyUpgrade(upgradeId)"
           >Buy</button>
         </div>
+        <div class="upgrade-cost">Cost: {{ upgradeCostLabel(upgradeId) }}</div>
+        <div class="upgrade-meta">{{ upgradeMetaLabel(upgradeId) }}</div>
       </div>
     </section>
 
@@ -368,6 +402,18 @@ button {
 .upgrade-level {
   opacity: 0.7;
   font-size: 11px;
+}
+
+.upgrade-status,
+.upgrade-cost,
+.upgrade-meta {
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.upgrade-cost,
+.upgrade-meta {
+  margin-top: 4px;
 }
 
 .research {
