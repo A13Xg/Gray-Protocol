@@ -14,6 +14,16 @@ import { format } from "./utils/formatter";
 import { ACTIVITY_DEFINITIONS, canUnlockActivity, purchaseActivityLevel } from "./core/activities";
 import { UPGRADE_DEFINITIONS, canPurchaseUpgrade, getUpgradeLevel, purchaseUpgrade } from "./core/upgrades";
 import { canResearchNode, purchaseResearchNode, RESEARCH_DEFINITIONS } from "./core/research";
+import { ACTION_DEFINITIONS, canExecuteAction, executeAction } from "./core/actions";
+import {
+  canClaimTask,
+  claimTask,
+  getRecommendedTasks,
+  getTaskProgressPercent,
+  isTaskClaimed,
+  isTaskComplete,
+  TASK_DEFINITIONS,
+} from "./core/tasks";
 
 onMounted(() => {
   loadGame();
@@ -33,6 +43,9 @@ const fmtComputeUsed = computed(() => format(getTotalAllocatedCompute(state)));
 const activityIds = Object.keys(ACTIVITY_DEFINITIONS);
 const upgradeIds = Object.keys(UPGRADE_DEFINITIONS);
 const researchIds = Object.keys(RESEARCH_DEFINITIONS);
+const actionIds = Object.keys(ACTION_DEFINITIONS);
+const taskIds = Object.keys(TASK_DEFINITIONS);
+const lastActionOutcome = ref<string>("");
 
 function buyLevel(activityId: string): void {
   purchaseActivityLevel(state, activityId);
@@ -107,6 +120,38 @@ function researchCostLabel(nodeId: string): string {
   }
   return parts.join(" | ");
 }
+
+function canRunAction(actionId: string): boolean {
+  return canExecuteAction(state, actionId);
+}
+
+function runAction(actionId: string): void {
+  const outcome = executeAction(state, actionId);
+  if (!outcome) {
+    lastActionOutcome.value = `Action ${actionId} unavailable`;
+    return;
+  }
+  const rewardSummary = Object.entries(outcome.appliedReward)
+    .map(([resource, amount]) => `${resource}+${format(amount as Decimal)}`)
+    .join(", ");
+  lastActionOutcome.value = `${actionId}: ${outcome.success ? "success" : "fail"} | ${rewardSummary || "no reward"}`;
+}
+
+function isClaimable(taskId: string): boolean {
+  return canClaimTask(state, taskId);
+}
+
+function claim(taskId: string): void {
+  claimTask(state, taskId);
+}
+
+function taskStatus(taskId: string): string {
+  if (isTaskClaimed(state, taskId)) return "Claimed";
+  if (isTaskComplete(state, taskId)) return "Complete";
+  return "In Progress";
+}
+
+const recommendedTasks = computed(() => getRecommendedTasks(state));
 </script>
 
 <template>
@@ -178,6 +223,35 @@ function researchCostLabel(nodeId: string): string {
           >Research</button>
         </div>
         <div class="research-cost">{{ researchCostLabel(researchId) }}</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Actions</h2>
+      <div v-for="actionId in actionIds" :key="actionId" class="action">
+        <div class="action-row">
+          <span class="action-name">{{ ACTION_DEFINITIONS[actionId].name }}</span>
+          <span class="action-path">{{ ACTION_DEFINITIONS[actionId].path }}</span>
+          <span class="action-count">x{{ state.manualActions.executedById[actionId] ?? 0 }}</span>
+          <button :disabled="!canRunAction(actionId)" @click="runAction(actionId)">Execute</button>
+        </div>
+      </div>
+      <div class="muted" v-if="lastActionOutcome">{{ lastActionOutcome }}</div>
+    </section>
+
+    <section class="card">
+      <h2>Tasks</h2>
+      <div class="muted" v-if="recommendedTasks.length > 0">
+        Recommended:
+        <span v-for="task in recommendedTasks" :key="task.id">{{ task.name }} </span>
+      </div>
+      <div v-for="taskId in taskIds" :key="taskId" class="task">
+        <div class="task-row">
+          <span class="task-name">{{ TASK_DEFINITIONS[taskId].name }}</span>
+          <span class="task-status">{{ taskStatus(taskId) }}</span>
+          <span class="task-progress">{{ getTaskProgressPercent(state, taskId) }}</span>
+          <button :disabled="!isClaimable(taskId)" @click="claim(taskId)">Claim</button>
+        </div>
       </div>
     </section>
 
@@ -322,6 +396,34 @@ button {
 
 .research-cost {
   margin-top: 4px;
+}
+
+.action,
+.task {
+  border-top: 1px solid #243624;
+  padding-top: 6px;
+  margin-top: 6px;
+}
+
+.action-row,
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.action-name,
+.task-name {
+  flex: 1;
+}
+
+.action-path,
+.action-count,
+.task-status,
+.task-progress {
+  opacity: 0.7;
+  font-size: 11px;
 }
 
 button:disabled {

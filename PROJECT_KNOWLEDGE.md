@@ -13,6 +13,8 @@ Gray Protocol is a static, deterministic, headless-first incremental game engine
 - src/core/activities.ts: activity definitions and delta/cost/yield logic
 - src/core/upgrades.ts: upgrade definitions, purchase logic, and multiplier helpers
 - src/core/research.ts: research eligibility, purchases, and effects
+- src/core/actions.ts: manual action definitions, unlock checks, execution outcomes
+- src/core/tasks.ts: task definitions, completion checks, recommendation and claim flow
 - src/core/prestige.ts: protocol reset foundation layer
 - src/core/engine.ts: deterministic tick, offline batching, compute allocation
 - src/core/persistence.ts: save/load/export/import, migration, codec
@@ -20,6 +22,7 @@ Gray Protocol is a static, deterministic, headless-first incremental game engine
 - src/core/state.ts: reactive singleton GameState
 - src/dev/simulate.ts: no-framework simulation harness
 - src/App.vue: thin Vue UI (resources, activities, upgrades, save, log)
+- src/App.vue: thin Vue UI (resources, activities, upgrades, research, actions, tasks, save, log)
 
 ## Resource Model
 
@@ -85,6 +88,14 @@ UpgradeDefinition fields:
 
 Upgrade state:
 - state.upgrades.levelsById: Record<string, number>
+
+Manual action state:
+- state.manualActions.executedById: Record<string, number>
+- state.manualActions.totalExecutions: number
+- state.manualActions.lastExecutedAtById: Record<string, number>
+
+Task state:
+- state.tasks.claimedById: Record<string, boolean>
 
 Supported implemented effects:
 - activityYieldMultiplier
@@ -181,6 +192,8 @@ Starter layer:
 ## Simulation Harness
 
 src/dev/simulate.ts demonstrates:
+- manual action execution outcomes and deterministic success/failure behavior
+- free-compute scaling behavior for mineLocally
 - activity purchases and activation
 - upgrade purchases and effect multipliers
 - compute allocation impact
@@ -192,6 +205,7 @@ src/dev/simulate.ts demonstrates:
 - prestige preview
 - serialization with upgrade levels
 - serialization with completed research IDs
+- task progress/recommendation and one-time claims
 - validateGameState and validateSerializedGameState pass
 
 ## Known Limitations
@@ -201,6 +215,6 @@ src/dev/simulate.ts demonstrates:
 - no full research tree UI
 - no automation system
 
-## Recommended Next Step
+## Current Next Step
 
-Prestige Expansion Layer or Manual Action/Task Layer discussion.
+Prestige expansion and deeper task content on top of the hybrid idle + manual action loop.

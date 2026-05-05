@@ -26,6 +26,14 @@ export function createInitialGameState(): GameState {
     prestige: { layers: createInitialPrestigeLayers() },
     allocations: { computeByActivityId: {} },
     upgrades: { levelsById: {} },
+    manualActions: {
+      executedById: {},
+      totalExecutions: 0,
+      lastExecutedAtById: {},
+    },
+    tasks: {
+      claimedById: {},
+    },
     timestamps: {
       createdAt: Date.now(),
       lastSavedAt: Date.now(),

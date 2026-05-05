@@ -33,6 +33,15 @@ import {
   purchaseUpgrade,
   UPGRADE_DEFINITIONS,
 } from "../core/upgrades";
+import { canExecuteAction, executeAction } from "../core/actions";
+import {
+  canClaimTask,
+  claimTask,
+  getRecommendedTasks,
+  getTaskProgressPercent,
+  isTaskComplete,
+  TASK_DEFINITIONS,
+} from "../core/tasks";
 
 function log(label: string, value: unknown): void {
   console.log(`[sim] ${label}:`, value);
@@ -75,6 +84,33 @@ export function runSimulation(): void {
     purchaseActivityLevel(gs, activityId);
   }
   log("Activities purchased", startableActivities);
+
+  // Manual actions do not require compute allocation to execute.
+  log("Can execute scanNetwork at start", canExecuteAction(gs, "scanNetwork"));
+  const firstScan = executeAction(gs, "scanNetwork");
+  log("scanNetwork outcome", firstScan ? { success: firstScan.success, reward: firstScan.appliedReward } : null);
+
+  const firstMine = executeAction(gs, "mineLocally");
+  log("mineLocally outcome (free compute scaling)", firstMine ? firstMine.appliedReward : null);
+
+  const firstPasswordAttempt = executeAction(gs, "passwordAttempt");
+  log(
+    "passwordAttempt stochastic outcome",
+    firstPasswordAttempt
+      ? {
+          success: firstPasswordAttempt.success,
+          roll: firstPasswordAttempt.roll?.toString() ?? "n/a",
+          chance: firstPasswordAttempt.successChance?.toString() ?? "n/a",
+          reward: firstPasswordAttempt.appliedReward,
+        }
+      : null
+  );
+
+  for (let i = 0; i < 10; i++) {
+    executeAction(gs, "scanNetwork");
+    executeAction(gs, "bugBounty");
+    executeAction(gs, "passwordAttempt");
+  }
 
   setComputeAllocation(gs, "basicCryptoMining", new Decimal(5));
   setComputeAllocation(gs, "passwordCracking", new Decimal(3));
@@ -173,6 +209,26 @@ export function runSimulation(): void {
   log("Can unlock zeroDayResearch before zeroDaySupplyChain", canUnlockActivity(gs, "zeroDayResearch"));
   purchaseResearchNode(gs, "zeroDaySupplyChain");
   log("Can unlock zeroDayResearch after zeroDaySupplyChain", canUnlockActivity(gs, "zeroDayResearch"));
+
+  log("Task completion snapshot", Object.fromEntries(
+    Object.keys(TASK_DEFINITIONS).map((taskId) => [
+      taskId,
+      {
+        complete: isTaskComplete(gs, taskId),
+        progress: getTaskProgressPercent(gs, taskId),
+      },
+    ])
+  ));
+
+  const recommendedTasks = getRecommendedTasks(gs).map((task) => task.id);
+  log("Recommended tasks", recommendedTasks);
+
+  for (const taskId of recommendedTasks) {
+    if (canClaimTask(gs, taskId)) {
+      claimTask(gs, taskId);
+    }
+  }
+  log("Claimed tasks", gs.tasks.claimedById);
 
   log("Completed research count", gs.research.completed.size);
   log("Completed research nodes", Array.from(gs.research.completed));

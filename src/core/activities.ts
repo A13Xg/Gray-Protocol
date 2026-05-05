@@ -5,6 +5,7 @@ import { canAccessReputationGate } from "./reputation";
 import { applyMultiplier, scaleExponential, scaleLinear } from "./math";
 import { applyResourceCost, canAffordResources, createEmptyResourceMap } from "./resources";
 import { getResearchReputationMultipliers, getResearchResourceYieldMultipliers, isActivityUnlockedByResearch } from "./research";
+import { meetsActionUnlockRequirements } from "./actions";
 
 export const ACTIVITY_DEFINITIONS: Record<string, ActivityDefinition> = {
   basicCryptoMining: {
@@ -64,6 +65,7 @@ export const ACTIVITY_DEFINITIONS: Record<string, ActivityDefinition> = {
     levelCostScaling: GAME_CONFIG.activities.computeLeasing.levelCostScaling,
     yieldScaling: GAME_CONFIG.activities.computeLeasing.yieldScaling,
     maxLevel: GAME_CONFIG.activities.computeLeasing.maxLevel,
+    actionUnlockRequirements: GAME_CONFIG.activities.computeLeasing.actionUnlockRequirements,
     usesComputeAllocation: true,
   },
   dataIndexing: {
@@ -78,6 +80,7 @@ export const ACTIVITY_DEFINITIONS: Record<string, ActivityDefinition> = {
     levelCostScaling: GAME_CONFIG.activities.dataIndexing.levelCostScaling,
     yieldScaling: GAME_CONFIG.activities.dataIndexing.yieldScaling,
     maxLevel: GAME_CONFIG.activities.dataIndexing.maxLevel,
+    actionUnlockRequirements: GAME_CONFIG.activities.dataIndexing.actionUnlockRequirements,
     usesComputeAllocation: true,
   },
   defensiveAudit: {
@@ -93,6 +96,7 @@ export const ACTIVITY_DEFINITIONS: Record<string, ActivityDefinition> = {
     yieldScaling: GAME_CONFIG.activities.defensiveAudit.yieldScaling,
     maxLevel: GAME_CONFIG.activities.defensiveAudit.maxLevel,
     reputationGate: GAME_CONFIG.activities.defensiveAudit.reputationGate,
+    actionUnlockRequirements: GAME_CONFIG.activities.defensiveAudit.actionUnlockRequirements,
     usesComputeAllocation: false,
   },
   threatIntelAnalysis: {
@@ -125,6 +129,7 @@ export const ACTIVITY_DEFINITIONS: Record<string, ActivityDefinition> = {
     yieldScaling: GAME_CONFIG.activities.botnetExpansion.yieldScaling,
     maxLevel: GAME_CONFIG.activities.botnetExpansion.maxLevel,
     reputationGate: GAME_CONFIG.activities.botnetExpansion.reputationGate,
+    actionUnlockRequirements: GAME_CONFIG.activities.botnetExpansion.actionUnlockRequirements,
     usesComputeAllocation: true,
   },
   zeroDayResearch: {
@@ -172,6 +177,10 @@ export function canUnlockActivity(state: GameState, activityId: string): boolean
   if (!def) return false;
 
   if (def.reputationGate && !canAccessReputationGate(state.resources.reputation, def.reputationGate)) {
+    return false;
+  }
+
+  if (!meetsActionUnlockRequirements(state, def.actionUnlockRequirements)) {
     return false;
   }
 

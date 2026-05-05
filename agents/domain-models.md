@@ -17,6 +17,10 @@
 - `prestige.layers: Record<string, PrestigeLayerState>`
 - `allocations.computeByActivityId: Record<string, Decimal>`
 - `upgrades.levelsById: Record<string, number>`
+- `manualActions.executedById: Record<string, number>`
+- `manualActions.totalExecutions: number`
+- `manualActions.lastExecutedAtById: Record<string, number>`
+- `tasks.claimedById: Record<string, boolean>`
 - `timestamps: { createdAt, lastSavedAt, lastTickAt }`
 - `log: string[]`
 
@@ -88,6 +92,26 @@ Only effect types wired into gameplay this layer: `activityYieldMultiplier`, `co
 - research preservation toggle
 - reward resource + reward amount
 
+## ManualActionDefinition
+
+- `id`, `name`, `description`
+- `type`: `instant | duration`
+- `path`: `shared | whitehat | blackhat | greyhat`
+- `baseCost`, `baseReward`
+- `reputationEffect`
+- optional `successChance`, `rewardVariance`, `failureRewardMultiplier`
+- optional compute scaling profile
+- optional cooldown and duration
+
+## TaskDefinition
+
+- `id`, `name`, `description`
+- `type`: `resourceThreshold | reputationThreshold | actionCount | activityLevel | researchCompletion`
+- typed requirement payload by task type
+- `reward: Partial<ResourceMap>`
+- `recommended: boolean`
+- optional `pathHint`
+
 ## ReputationGate
 
 Supports optional:
@@ -108,6 +132,6 @@ Top-level save envelope:
 Decoded `payload` is `SerializedGameState`:
 
 - canonical `resources` as scientific strings
-- activities/research/prestige/allocations/upgrades/timestamps
+- activities/research/prestige/allocations/upgrades/manualActions/tasks/timestamps
 - `allocations.computeByActivityId` values as scientific strings
 - `upgrades.levelsById` values as integers

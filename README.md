@@ -29,8 +29,17 @@ Legacy keys are not used by core runtime logic.
 
 ## Static Deployment
 
-The app builds to static assets with Vite (`dist/`) and is suitable for GitHub Pages style deployment.
-To deploy on a repo-scoped GitHub Pages URL, set `base: '/Gray-Protocol/'` in `vite.config.ts`.
+This project is configured for GitHub Pages deployment through GitHub Actions.
+
+- Vite base path: `/Gray-Protocol/`
+- Build output directory: `dist/`
+- Workflow: `.github/workflows/deploy-pages.yml`
+
+Deploy steps:
+
+1. In GitHub: Settings → Pages → Build and deployment → Source = GitHub Actions
+2. Push to `main` (or run the deploy workflow manually)
+3. The workflow builds and deploys `dist/` automatically
 
 ## Save System Summary
 
@@ -120,9 +129,39 @@ Research definitions include optional path positions for future tree UI.
 - Allocation total constraints
 - Research definition validation (costs/effects/IDs)
 - Research prerequisite graph validation (missing prereqs, self-deps, cycles)
+- Manual action counters and IDs validation
+- Task claim-state validation
+
+### Manual Actions (4 total)
+
+- `scanNetwork` — instant, shared, low-risk baseline payout
+- `mineLocally` — duration-style shared action; reward scales with free compute
+- `bugBounty` — instant whitehat action; positive reputation impact
+- `passwordAttempt` — instant blackhat action; deterministic pseudo-random success/failure with variable reward
+
+Key rules:
+- Manual actions do not require compute allocation to run.
+- Action performance uses config-driven reputation multipliers by path alignment.
+- `passwordAttempt` uses deterministic outcome resolution (state-seeded roll), not non-deterministic RNG.
+
+### Tasks (7 total)
+
+Supported task requirement types:
+- `resourceThreshold`
+- `reputationThreshold`
+- `actionCount`
+- `activityLevel`
+- `researchCompletion`
+
+Task behavior:
+- Completion is dynamic and state-derived.
+- Claims are one-time (`state.tasks.claimedById`) and grant config-driven rewards.
+- `getRecommendedTasks(state)` returns nearest-progress, non-claimed tasks and filters path-improbable reputation goals.
 
 ### Minimal UI Exposure
 
 - Activity controls
 - Upgrade list + purchase buttons
 - Research list + purchase buttons + path label + cost line + completion status
+- Manual action list + execute buttons + lightweight outcome feedback
+- Task list + progress + claim buttons + recommended tasks hint

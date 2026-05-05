@@ -11,6 +11,9 @@ Primary balance/config source: `src/core/config.ts`
 - `resources.display`
 - `reputation` thresholds
 - `activities` definitions + scaling rates
+- `manualActionScaling` (alignment/reputation-based action multipliers)
+- `actions` definitions + action-specific balance knobs
+- `tasks` definitions + requirement/reward data
 - `upgrades` definitions + scaling/effect data
 - `research` definitions + effects
 - `prestige` definitions
@@ -30,6 +33,20 @@ Core resource identity is always `ResourceKey`; display metadata is presentation
 4. Keep balance data in config; do not hardcode in engine logic.
 
 Current baseline has 9 activities across shared/whitehat/blackhat paths.
+
+## Adding Manual Actions
+
+1. Add action values to `GAME_CONFIG.actions`.
+2. Keep action balance in config only (costs, rewards, variance, success chance, scaling).
+3. Wire into `ACTION_DEFINITIONS` in `src/core/actions.ts`.
+4. Keep execution deterministic for stochastic outcomes.
+
+## Adding Tasks
+
+1. Add task values to `GAME_CONFIG.tasks`.
+2. Use one of supported task types (`resourceThreshold`, `reputationThreshold`, `actionCount`, `activityLevel`, `researchCompletion`).
+3. Wire into `TASK_DEFINITIONS` in `src/core/tasks.ts`.
+4. Keep rewards and requirements config-driven.
 
 ## Adding Upgrades
 

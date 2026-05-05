@@ -33,6 +33,7 @@ export interface ActivityDefinition {
   reputationGate?: ReputationGate;
   unlockRequirements?: string[];
   requiresResearchUnlock?: boolean;
+  actionUnlockRequirements?: Partial<Record<string, number>>;
   consumesPerSecond?: Partial<ResourceMap>;
   usesComputeAllocation: boolean;
 }
@@ -107,6 +108,78 @@ export interface UpgradeState {
   levelsById: Record<string, number>;
 }
 
+export type ManualActionType = "instant" | "duration";
+
+export interface ManualActionDefinition {
+  id: string;
+  name: string;
+  description: string;
+  type: ManualActionType;
+  durationMs?: number;
+  baseCost: Partial<ResourceMap>;
+  reputationEffect: Decimal;
+  baseReward: Partial<ResourceMap>;
+  successChance?: Decimal;
+  rewardVariance?: Decimal;
+  failureRewardMultiplier?: Decimal;
+  path: ActivityPath;
+  reputationScaling: boolean;
+  computeScaling?: {
+    enabled: boolean;
+    freeComputeSlope: Decimal;
+    maxMultiplier: Decimal;
+  };
+  cooldownMs?: number;
+}
+
+export interface ManualActionExecutionOutcome {
+  actionId: string;
+  success: boolean;
+  appliedCost: Partial<ResourceMap>;
+  appliedReward: Partial<ResourceMap>;
+  reputationDelta: Decimal;
+  reputationMultiplier: Decimal;
+  computeMultiplier: Decimal;
+  roll?: Decimal;
+  successChance?: Decimal;
+}
+
+export interface ManualActionState {
+  executedById: Record<string, number>;
+  totalExecutions: number;
+  lastExecutedAtById: Record<string, number>;
+}
+
+export type TaskType =
+  | "resourceThreshold"
+  | "reputationThreshold"
+  | "actionCount"
+  | "activityLevel"
+  | "researchCompletion";
+
+export interface TaskDefinition {
+  id: string;
+  name: string;
+  description: string;
+  type: TaskType;
+  requirement: {
+    resource?: ResourceKey;
+    amount?: Decimal;
+    actionId?: string;
+    count?: number;
+    activityId?: string;
+    level?: number;
+    researchId?: string;
+  };
+  reward: Partial<ResourceMap>;
+  recommended: boolean;
+  pathHint?: ActivityPath;
+}
+
+export interface TaskState {
+  claimedById: Record<string, boolean>;
+}
+
 export interface PrestigeLayerDefinition {
   id: string;
   name: string;
@@ -149,6 +222,8 @@ export interface GameState {
   };
   allocations: AllocationMap;
   upgrades: UpgradeState;
+  manualActions: ManualActionState;
+  tasks: TaskState;
   timestamps: {
     createdAt: number;
     lastSavedAt: number;
@@ -179,6 +254,14 @@ export interface SerializedGameState {
   >;
   allocations: SerializedAllocationMap;
   upgrades: { levelsById: Record<string, number> };
+  manualActions: {
+    executedById: Record<string, number>;
+    totalExecutions: number;
+    lastExecutedAtById: Record<string, number>;
+  };
+  tasks: {
+    claimedById: Record<string, boolean>;
+  };
   timestamps: {
     createdAt: number;
     lastSavedAt: number;

@@ -58,6 +58,14 @@ function serializeState(gs: GameState): SerializedGameState {
     upgrades: {
       levelsById: { ...gs.upgrades.levelsById },
     },
+    manualActions: {
+      executedById: { ...gs.manualActions.executedById },
+      totalExecutions: gs.manualActions.totalExecutions,
+      lastExecutedAtById: { ...gs.manualActions.lastExecutedAtById },
+    },
+    tasks: {
+      claimedById: { ...gs.tasks.claimedById },
+    },
     timestamps: {
       ...gs.timestamps,
       lastSavedAt: Date.now(),
@@ -103,6 +111,26 @@ function repairSerializedState(raw: SerializedGameState): SerializedGameState {
     );
   }
 
+  const repairedManualActionExecutedById: Record<string, number> = {};
+  const repairedManualActionLastExecutedAtById: Record<string, number> = {};
+  if (raw.manualActions?.executedById && typeof raw.manualActions.executedById === "object") {
+    for (const [id, value] of Object.entries(raw.manualActions.executedById)) {
+      repairedManualActionExecutedById[id] = typeof value === "number" ? Math.max(0, Math.floor(value)) : 0;
+    }
+  }
+  if (raw.manualActions?.lastExecutedAtById && typeof raw.manualActions.lastExecutedAtById === "object") {
+    for (const [id, value] of Object.entries(raw.manualActions.lastExecutedAtById)) {
+      repairedManualActionLastExecutedAtById[id] = typeof value === "number" ? Math.max(0, Math.floor(value)) : 0;
+    }
+  }
+
+  const repairedTaskClaims: Record<string, boolean> = {};
+  if (raw.tasks?.claimedById && typeof raw.tasks.claimedById === "object") {
+    for (const [id, value] of Object.entries(raw.tasks.claimedById)) {
+      repairedTaskClaims[id] = value === true;
+    }
+  }
+
   return {
     ...raw,
     version: typeof raw.version === "string" ? raw.version : VERSION,
@@ -120,6 +148,17 @@ function repairSerializedState(raw: SerializedGameState): SerializedGameState {
     allocations: { computeByActivityId: repairedAllocations },
     upgrades: {
       levelsById: repairUpgradeLevels(raw.upgrades?.levelsById),
+    },
+    manualActions: {
+      executedById: repairedManualActionExecutedById,
+      totalExecutions:
+        typeof raw.manualActions?.totalExecutions === "number"
+          ? Math.max(0, Math.floor(raw.manualActions.totalExecutions))
+          : 0,
+      lastExecutedAtById: repairedManualActionLastExecutedAtById,
+    },
+    tasks: {
+      claimedById: repairedTaskClaims,
     },
     timestamps: {
       createdAt: raw.timestamps?.createdAt ?? Date.now(),
@@ -168,6 +207,16 @@ function deserializeState(serialized: SerializedGameState, target: GameState): v
   );
 
   target.upgrades.levelsById = { ...repaired.upgrades.levelsById };
+
+  target.manualActions = {
+    executedById: { ...repaired.manualActions.executedById },
+    totalExecutions: repaired.manualActions.totalExecutions,
+    lastExecutedAtById: { ...repaired.manualActions.lastExecutedAtById },
+  };
+
+  target.tasks = {
+    claimedById: { ...repaired.tasks.claimedById },
+  };
 
   target.timestamps = {
     ...repaired.timestamps,

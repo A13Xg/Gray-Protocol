@@ -65,6 +65,7 @@ export const GAME_CONFIG = {
     computeLeasing: {
       baseCost: { compute: new Decimal(3) },
       baseYieldPerSecond: { money: new Decimal(1.5) },
+      actionUnlockRequirements: { scanNetwork: 5 },
       levelCostScaling: "exponential" as const,
       yieldScaling: "linear" as const,
       costScalingRate: new Decimal(1.15),
@@ -74,6 +75,7 @@ export const GAME_CONFIG = {
     dataIndexing: {
       baseCost: { money: new Decimal(8) },
       baseYieldPerSecond: { money: new Decimal(0.5), compute: new Decimal(0.1) },
+      actionUnlockRequirements: { mineLocally: 3 },
       levelCostScaling: "exponential" as const,
       yieldScaling: "linear" as const,
       costScalingRate: new Decimal(1.12),
@@ -83,6 +85,7 @@ export const GAME_CONFIG = {
     defensiveAudit: {
       baseCost: { money: new Decimal(15) },
       baseYieldPerSecond: { money: new Decimal(3), reputation: new Decimal(0.2) },
+      actionUnlockRequirements: { bugBounty: 5 },
       levelCostScaling: "exponential" as const,
       yieldScaling: "linear" as const,
       costScalingRate: new Decimal(1.22),
@@ -104,6 +107,7 @@ export const GAME_CONFIG = {
     botnetExpansion: {
       baseCost: { crypto: new Decimal(5) },
       baseYieldPerSecond: { compute: new Decimal(0.5), crypto: new Decimal(0.2) },
+      actionUnlockRequirements: { passwordAttempt: 10 },
       consumesPerSecond: { money: new Decimal(0.1) },
       levelCostScaling: "exponential" as const,
       yieldScaling: "linear" as const,
@@ -235,6 +239,123 @@ export const GAME_CONFIG = {
   scaling: {
     softcapThreshold: new Decimal("1e100"),
     softcapPower: new Decimal(0.5),
+  },
+
+  manualActionScaling: {
+    reputation: {
+      maxBoostMultiplier: new Decimal(1.6),
+      maxPenaltyMultiplier: new Decimal(0.55),
+      curveReputationForMax: new Decimal(200),
+      greyNeutralThreshold: new Decimal(25),
+    },
+  },
+
+  actions: {
+    scanNetwork: {
+      type: "instant" as const,
+      path: "shared" as const,
+      baseCost: {},
+      baseReward: { money: new Decimal(2) },
+      reputationEffect: new Decimal(0.01),
+      reputationScaling: true,
+      rewardVariance: new Decimal(0.2),
+      cooldownMs: 0,
+    },
+    mineLocally: {
+      type: "duration" as const,
+      path: "shared" as const,
+      durationMs: 60_000,
+      baseCost: {},
+      baseReward: { crypto: new Decimal(4) },
+      reputationEffect: new Decimal(0),
+      reputationScaling: true,
+      computeScaling: {
+        enabled: true,
+        freeComputeSlope: new Decimal(0.04),
+        maxMultiplier: new Decimal(4),
+      },
+      rewardVariance: new Decimal(0),
+      cooldownMs: 0,
+    },
+    bugBounty: {
+      type: "instant" as const,
+      path: "whitehat" as const,
+      baseCost: { money: new Decimal(1) },
+      baseReward: { money: new Decimal(12) },
+      reputationEffect: new Decimal(0.25),
+      reputationScaling: true,
+      rewardVariance: new Decimal(0.25),
+      cooldownMs: 0,
+    },
+    passwordAttempt: {
+      type: "instant" as const,
+      path: "blackhat" as const,
+      baseCost: { compute: new Decimal(0.2) },
+      baseReward: { money: new Decimal(8), crypto: new Decimal(1.5) },
+      reputationEffect: new Decimal(-0.35),
+      successChance: new Decimal(0.52),
+      rewardVariance: new Decimal(0.4),
+      failureRewardMultiplier: new Decimal(0.1),
+      reputationScaling: true,
+      computeScaling: {
+        enabled: true,
+        freeComputeSlope: new Decimal(0.015),
+        maxMultiplier: new Decimal(2),
+      },
+      cooldownMs: 0,
+    },
+  },
+
+  tasks: {
+    earnSeedMoney: {
+      type: "resourceThreshold" as const,
+      requirement: { resource: "money" as const, amount: new Decimal(1e3) },
+      reward: { money: new Decimal(50) },
+      recommended: true,
+      pathHint: "shared" as const,
+    },
+    mineSeedCrypto: {
+      type: "resourceThreshold" as const,
+      requirement: { resource: "crypto" as const, amount: new Decimal(1e2) },
+      reward: { crypto: new Decimal(10) },
+      recommended: true,
+      pathHint: "shared" as const,
+    },
+    whitehatCredibility: {
+      type: "reputationThreshold" as const,
+      requirement: { amount: new Decimal(50) },
+      reward: { reputation: new Decimal(5), money: new Decimal(75) },
+      recommended: true,
+      pathHint: "whitehat" as const,
+    },
+    blackhatNotoriety: {
+      type: "reputationThreshold" as const,
+      requirement: { amount: new Decimal(-50) },
+      reward: { reputation: new Decimal(-5), crypto: new Decimal(20) },
+      recommended: false,
+      pathHint: "blackhat" as const,
+    },
+    passwordPractice: {
+      type: "actionCount" as const,
+      requirement: { actionId: "passwordAttempt", count: 10 },
+      reward: { money: new Decimal(40), crypto: new Decimal(8) },
+      recommended: true,
+      pathHint: "blackhat" as const,
+    },
+    firstActivityLevel: {
+      type: "activityLevel" as const,
+      requirement: { activityId: "basicCryptoMining", level: 1 },
+      reward: { money: new Decimal(30), compute: new Decimal(2) },
+      recommended: true,
+      pathHint: "shared" as const,
+    },
+    firstUpgrade: {
+      type: "researchCompletion" as const,
+      requirement: { researchId: "parallelProcessing" },
+      reward: { compute: new Decimal(5) },
+      recommended: true,
+      pathHint: "shared" as const,
+    },
   },
 
   upgrades: {

@@ -6,6 +6,8 @@ import { ALL_RESOURCE_KEYS } from "./resources";
 import { RESEARCH_DEFINITIONS } from "./research";
 import { isValidDecimal } from "./math";
 import { UPGRADE_DEFINITIONS } from "./upgrades";
+import { ACTION_DEFINITIONS } from "./actions";
+import { TASK_DEFINITIONS } from "./tasks";
 
 const SCIENTIFIC_OR_ZERO = /^-?(?:0|\d+(?:\.\d+)?e[+-]?\d+)$/i;
 
@@ -231,6 +233,20 @@ export function validateUpgradeId(id: string): ValidationResult {
   return success();
 }
 
+export function validateActionId(id: string): ValidationResult {
+  if (!(id in ACTION_DEFINITIONS)) {
+    return { valid: false, errors: [`Unknown action id: ${id}`] };
+  }
+  return success();
+}
+
+export function validateTaskId(id: string): ValidationResult {
+  if (!(id in TASK_DEFINITIONS)) {
+    return { valid: false, errors: [`Unknown task id: ${id}`] };
+  }
+  return success();
+}
+
 export function validateUpgradeDefinitions(): ValidationResult {
   const errors: string[] = [];
 
@@ -354,6 +370,37 @@ export function validateGameState(state: GameState): ValidationResult {
     }
   }
 
+  for (const [actionId, count] of Object.entries(state.manualActions.executedById)) {
+    const actionValidation = validateActionId(actionId);
+    if (!actionValidation.valid) {
+      errors.push(...actionValidation.errors);
+    }
+    if (!Number.isInteger(count) || count < 0) {
+      errors.push(`Action ${actionId} executed count must be a non-negative integer`);
+    }
+  }
+
+  for (const [actionId, lastExecutedAt] of Object.entries(state.manualActions.lastExecutedAtById)) {
+    const actionValidation = validateActionId(actionId);
+    if (!actionValidation.valid) {
+      errors.push(...actionValidation.errors);
+    }
+    if (!Number.isFinite(lastExecutedAt) || lastExecutedAt < 0) {
+      errors.push(`Action ${actionId} lastExecutedAt must be a non-negative number`);
+    }
+  }
+
+  if (!Number.isInteger(state.manualActions.totalExecutions) || state.manualActions.totalExecutions < 0) {
+    errors.push("manualActions.totalExecutions must be a non-negative integer");
+  }
+
+  for (const taskId of Object.keys(state.tasks.claimedById)) {
+    const taskValidation = validateTaskId(taskId);
+    if (!taskValidation.valid) {
+      errors.push(...taskValidation.errors);
+    }
+  }
+
   const allocationValidation = validateAllocationTotals(state);
   if (!allocationValidation.valid) errors.push(...allocationValidation.errors);
 
@@ -414,6 +461,42 @@ export function validateSerializedGameState(serialized: unknown): ValidationResu
   for (const nodeId of payload.researchCompleted ?? []) {
     if (!(nodeId in RESEARCH_DEFINITIONS)) {
       errors.push(`researchCompleted has unknown id: ${nodeId}`);
+    }
+  }
+
+  for (const [actionId, count] of Object.entries(payload.manualActions?.executedById ?? {})) {
+    if (!(actionId in ACTION_DEFINITIONS)) {
+      errors.push(`manualActions.executedById has unknown action id: ${actionId}`);
+    }
+    if (typeof count !== "number" || !Number.isInteger(count) || count < 0) {
+      errors.push(`manualActions.executedById.${actionId} must be a non-negative integer`);
+    }
+  }
+
+  for (const [actionId, lastExecutedAt] of Object.entries(payload.manualActions?.lastExecutedAtById ?? {})) {
+    if (!(actionId in ACTION_DEFINITIONS)) {
+      errors.push(`manualActions.lastExecutedAtById has unknown action id: ${actionId}`);
+    }
+    if (typeof lastExecutedAt !== "number" || !Number.isFinite(lastExecutedAt) || lastExecutedAt < 0) {
+      errors.push(`manualActions.lastExecutedAtById.${actionId} must be a non-negative number`);
+    }
+  }
+
+  if (
+    payload.manualActions &&
+    (typeof payload.manualActions.totalExecutions !== "number" ||
+      !Number.isInteger(payload.manualActions.totalExecutions) ||
+      payload.manualActions.totalExecutions < 0)
+  ) {
+    errors.push("manualActions.totalExecutions must be a non-negative integer");
+  }
+
+  for (const [taskId, claimed] of Object.entries(payload.tasks?.claimedById ?? {})) {
+    if (!(taskId in TASK_DEFINITIONS)) {
+      errors.push(`tasks.claimedById has unknown task id: ${taskId}`);
+    }
+    if (typeof claimed !== "boolean") {
+      errors.push(`tasks.claimedById.${taskId} must be a boolean`);
     }
   }
 
