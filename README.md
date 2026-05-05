@@ -1,5 +1,9 @@
 # Gray Protocol
 
+[![Deploy GitHub Pages](https://github.com/alexandergoodman/Gray-Protocol/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/alexandergoodman/Gray-Protocol/actions/workflows/deploy-pages.yml)
+
+Live site: https://alexandergoodman.github.io/Gray-Protocol/
+
 Gray Protocol is a headless-first incremental idle game built with Vue 3, TypeScript, and Vite for static hosting (including GitHub Pages).
 
 ## Tech Stack
