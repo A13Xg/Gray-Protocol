@@ -135,3 +135,8 @@ Decoded `payload` is `SerializedGameState`:
 - activities/research/prestige/allocations/upgrades/manualActions/tasks/timestamps
 - `allocations.computeByActivityId` values as scientific strings
 - `upgrades.levelsById` values as integers
+
+## Documentation Repositories
+
+- Repository docs live in this repo (`README.md`, `PROJECT_KNOWLEDGE.md`, `agents/*.md`).
+- Wiki docs live in the separate wiki git repository (`Gray-Protocol.wiki.git`).

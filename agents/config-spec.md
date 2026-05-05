@@ -2,6 +2,10 @@
 
 Primary balance/config source: `src/core/config.ts`
 
+Deployment note:
+- GitHub Pages deploys through GitHub Actions from `dist/` artifacts.
+- Keep Vite base aligned with repository path (`/Gray-Protocol/`).
+
 ## GAME_CONFIG Structure
 
 - `serialization.saveVersion`

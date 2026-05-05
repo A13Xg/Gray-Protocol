@@ -1,8 +1,9 @@
 # Gray Protocol
 
-[![Deploy GitHub Pages](https://github.com/alexandergoodman/Gray-Protocol/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/alexandergoodman/Gray-Protocol/actions/workflows/deploy-pages.yml)
+[![Deploy GitHub Pages](https://github.com/a13xg/Gray-Protocol/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/a13xg/Gray-Protocol/actions/workflows/deploy-pages.yml)
 
-Live site: https://alexandergoodman.github.io/Gray-Protocol/
+Live site: https://a13xg.github.io/Gray-Protocol/
+Wiki: https://github.com/A13Xg/Gray-Protocol/wiki
 
 Gray Protocol is a headless-first incremental idle game built with Vue 3, TypeScript, and Vite for static hosting (including GitHub Pages).
 
@@ -44,6 +45,12 @@ Deploy steps:
 1. In GitHub: Settings → Pages → Build and deployment → Source = GitHub Actions
 2. Push to `main` (or run the deploy workflow manually)
 3. The workflow builds and deploys `dist/` automatically
+
+## Documentation Surfaces
+
+- README (this file): quick start, architecture summary, deploy setup
+- Project knowledge: `PROJECT_KNOWLEDGE.md` for implementation-level notes
+- Wiki: long-form guides and evolving design notes
 
 ## Save System Summary
 
@@ -169,3 +176,9 @@ Task behavior:
 - Research list + purchase buttons + path label + cost line + completion status
 - Manual action list + execute buttons + lightweight outcome feedback
 - Task list + progress + claim buttons + recommended tasks hint
+
+## Contributing Docs
+
+- Short operational notes should stay in repository markdown docs.
+- Long-form tutorials and design rationale should go to the project wiki.
+- If deployment behavior changes, update both this README and wiki deployment pages together.

@@ -11,3 +11,5 @@
 - Research tree definitions and progression must remain config-driven.
 - Upgrade state is level-based: `state.upgrades.levelsById` (integers, bounded by definition max level).
 - Validation must enforce payload integrity, canonical keys, ID validity, Decimal validity, allocation constraints, upgrade level bounds, and research graph integrity.
+- GitHub Pages deployment is workflow-driven; do not require committed static output directories as a deployment source.
+- Documentation changes that affect setup/deploy behavior must update both repo docs and wiki docs in the same pass.

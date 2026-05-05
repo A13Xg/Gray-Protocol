@@ -21,8 +21,19 @@ Gray Protocol is a static, deterministic, headless-first incremental game engine
 - src/core/validation.ts: runtime/save validation rules
 - src/core/state.ts: reactive singleton GameState
 - src/dev/simulate.ts: no-framework simulation harness
-- src/App.vue: thin Vue UI (resources, activities, upgrades, save, log)
 - src/App.vue: thin Vue UI (resources, activities, upgrades, research, actions, tasks, save, log)
+
+## Deployment Model
+
+- GitHub Pages deployment uses GitHub Actions workflow at `.github/workflows/deploy-pages.yml`.
+- Vite output directory is `dist/`.
+- Repo-scoped Pages base path is `/Gray-Protocol/`.
+
+## Documentation Model
+
+- `README.md` is the operational quick-start and deployment source of truth.
+- `PROJECT_KNOWLEDGE.md` captures implementation and architecture context.
+- Project wiki is used for longer tutorials and evolving design rationale.
 
 ## Resource Model
 

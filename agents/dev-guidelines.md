@@ -36,3 +36,8 @@
 - Run `npm run build` after changes.
 - Resolve TypeScript errors before finishing.
 - Keep exports/imports synchronized across core modules.
+
+## Documentation Expectations
+
+- If deployment behavior changes, update `README.md`, `PROJECT_KNOWLEDGE.md`, and relevant wiki pages.
+- Keep quick-reference instructions in repository docs, and long-form narrative content in wiki pages.
