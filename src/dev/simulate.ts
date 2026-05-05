@@ -1,10 +1,26 @@
-// src/dev/simulate.ts — Core Baseline Simulation
+// src/dev/simulate.ts — Core Scaling / Talent / Prestige Simulation
 import Decimal from "break_eternity.js";
 import { createInitialGameState } from "../core/state";
-import { ACTION_DEFINITIONS, executeAction, getReputationAlignment } from "../core/actions";
-import { convertMoneyToCrypto, getCryptoPrice } from "../core/crypto";
-import { validateGameState, validateCryptoPrice, validateSerializedGameState } from "../core/validation";
 import { previewSerializedState } from "../core/persistence";
+import { validateCryptoPrice, validateGameState, validateSerializedGameState } from "../core/validation";
+import {
+  executeManualGenerator,
+  GENERATOR_CONFIGS,
+  upgradeGenerator,
+  startTimedGenerator,
+  tickTimedGenerators,
+  GENERATORS,
+} from "../core/generators";
+import { getCryptoPrice, convertMoneyToCrypto } from "../core/crypto";
+import {
+  TALENT_NODES,
+  canPurchaseTalentNode,
+  purchaseTalentNode,
+  getGeneratorTalentMultiplier,
+  getCryptoEfficiencyMultiplier,
+} from "../core/upgrades";
+import { applyPrestige, canPrestige, getPrestigeRequirement } from "../core/prestige";
+import { getGeneratorMultiplierStack } from "../core/scaling";
 
 function log(label: string, value: unknown): void {
   console.log(`[sim] ${label}:`, value);
@@ -13,89 +29,142 @@ function log(label: string, value: unknown): void {
 function snap(gs: ReturnType<typeof createInitialGameState>): Record<string, string> {
   return {
     money: gs.resources.money.toString(),
-    crypto: gs.resources.crypto.toFixed(6),
+    crypto: gs.resources.crypto.toString(),
     compute: gs.resources.compute.toString(),
     reputation: gs.resources.reputation.toString(),
-    alignment: getReputationAlignment(gs.resources.reputation),
+    prestigeLevel: gs.prestige.level.toString(),
+    prestigeMultiplier: gs.prestige.multiplier.toString(),
   };
 }
 
 export function runSimulation(): void {
-  console.log("=== Gray Protocol Simulation — Core Baseline ===");
+  console.log("=== Gray Protocol Simulation — Core Scaling Foundation ===");
 
   const gs = createInitialGameState();
-  log("Initial resources", snap(gs));
+  log("Initial state", snap(gs));
 
-  // ── Manual Actions ────────────────────────────────────────────────────────
-  log("Actions defined", Object.keys(ACTION_DEFINITIONS));
-
-  // pentest x5
-  for (let i = 1; i <= 5; i++) {
-    const o = executeAction(gs, "pentestSystem");
-    log(`pentestSystem #${i}`, {
-      reward: o?.rewardApplied.toString(),
-      repDelta: o?.reputationDelta.toString(),
-      moneyNow: gs.resources.money.toString(),
-      repNow: gs.resources.reputation.toString(),
-    });
-  }
-
-  // exploit x3
-  for (let i = 1; i <= 3; i++) {
-    const o = executeAction(gs, "exploitSystem");
-    log(`exploitSystem #${i}`, {
-      reward: o?.rewardApplied.toString(),
-      repDelta: o?.reputationDelta.toString(),
-      moneyNow: gs.resources.money.toString(),
-      repNow: gs.resources.reputation.toString(),
-    });
-  }
-
-  log("After 5 pentest + 3 exploit", snap(gs));
-
-  // ── Crypto Price Curve ────────────────────────────────────────────────────
-  const priceSamples = [0, 10_000, 20_000, 30_000, 40_000, 50_000, 60_000].map((ms) => {
-    const price = getCryptoPrice(ms);
-    const valid = validateCryptoPrice(price).valid;
-    return { ms: `${ms / 1000}s`, price: price.toFixed(4), valid };
-  });
-  log("Crypto price curve (1-minute period)", priceSamples);
-
-  // ── Crypto Conversion ─────────────────────────────────────────────────────
-  // Fund the state so conversion is possible
-  for (let i = 0; i < 5; i++) executeAction(gs, "pentestSystem"); // +$5 more
-
-  const result = convertMoneyToCrypto(gs, new Decimal(3));
-  log("Convert $3 to crypto", {
-    paid: result?.paid.toString(),
-    received: result?.received.toFixed(6),
-    pricePerUnit: result?.pricePerUnit.toFixed(4),
-    moneyNow: gs.resources.money.toString(),
-    cryptoNow: gs.resources.crypto.toFixed(6),
+  // 1) Verify generator stack ordering output path
+  const manualCfg = GENERATOR_CONFIGS.hardenDevice;
+  const stackAtStart = getGeneratorMultiplierStack(gs, manualCfg, "money");
+  log("Initial hardenDevice multiplier stack", {
+    base: stackAtStart.base.toString(),
+    level: stackAtStart.level.toString(),
+    talentUpgrade: stackAtStart.talentUpgrade.toString(),
+    prestige: stackAtStart.prestige.toString(),
+    reputationCompute: stackAtStart.reputationCompute.toString(),
+    total: stackAtStart.total.toString(),
   });
 
-  // Over-budget conversion must fail
-  const overResult = convertMoneyToCrypto(gs, new Decimal(9999));
-  log("Convert $9999 (over budget) → should be null", overResult === null ? "null ✅" : "ERROR: expected null");
+  const beforeManual = gs.resources.money;
+  const m1 = executeManualGenerator(gs, "hardenDevice");
+  log("Manual generator execute (hardenDevice)", {
+    reward: m1?.outputs.money?.toString(),
+    expectedDelta: beforeManual.add(m1?.outputs.money ?? 0).sub(beforeManual).toString(),
+    stackTotal: m1?.multiplierStack?.total.toString(),
+  });
 
-  // Zero-amount conversion must fail
-  const zeroResult = convertMoneyToCrypto(gs, new Decimal(0));
-  log("Convert $0 → should be null", zeroResult === null ? "null ✅" : "ERROR: expected null");
+  // 2) Level scaling
+  upgradeGenerator(gs, "hardenDevice"); // lv2
+  upgradeGenerator(gs, "hardenDevice"); // lv3
+  const level3Stack = getGeneratorMultiplierStack(gs, manualCfg, "money");
+  const m2 = executeManualGenerator(gs, "hardenDevice");
+  log("Level scaling check (hardenDevice lv3)", {
+    stackLevel: level3Stack.level.toString(),
+    reward: m2?.outputs.money?.toString(),
+  });
 
-  // ── Reputation Alignment Thresholds ──────────────────────────────────────
-  const repTests: number[] = [-150, -100, -50, 0, 50, 100, 150];
-  const alignments = repTests.map((r) => ({
-    rep: r,
-    alignment: getReputationAlignment(new Decimal(r)),
-  }));
-  log("Reputation alignment thresholds", alignments);
+  // 3) Talent tree checks
+  gs.resources = {
+    ...gs.resources,
+    money: new Decimal(100),
+    crypto: new Decimal(10),
+    reputation: new Decimal(10),
+  };
+  log("Talent nodes", Object.keys(TALENT_NODES));
 
-  // ── Validation ────────────────────────────────────────────────────────────
+  const canManualTalent = canPurchaseTalentNode(gs, "manualProtocols");
+  const boughtManualTalent = purchaseTalentNode(gs, "manualProtocols");
+  log("manualProtocols purchase", { canManualTalent, boughtManualTalent });
+
+  const canPermanent = canPurchaseTalentNode(gs, "persistentAutomation");
+  const boughtPermanent = purchaseTalentNode(gs, "persistentAutomation");
+  log("persistentAutomation purchase", { canPermanent, boughtPermanent });
+
+  const canMarket = canPurchaseTalentNode(gs, "marketMakers");
+  const boughtMarket = purchaseTalentNode(gs, "marketMakers");
+  log("marketMakers purchase", { canMarket, boughtMarket });
+
+  const talentMult = getGeneratorTalentMultiplier(gs, manualCfg, "money");
+  const cryptoEff = getCryptoEfficiencyMultiplier(gs);
+  log("Talent multipliers", {
+    manualMoneyMultiplier: talentMult.toString(),
+    cryptoEfficiency: cryptoEff.toString(),
+  });
+
+  // 4) Prestige checks
+  const reqAtLevel0 = getPrestigeRequirement(gs.prestige.level);
+  gs.prestige.cumulativeResources = {
+    ...gs.prestige.cumulativeResources,
+    money: reqAtLevel0,
+  };
+  log("Prestige eligibility", {
+    requirement: reqAtLevel0.toString(),
+    canPrestige: canPrestige(gs),
+  });
+
+  const prestigeApplied = applyPrestige(gs);
+  log("Prestige applied", {
+    prestigeApplied,
+    level: gs.prestige.level.toString(),
+    multiplier: gs.prestige.multiplier.toString(),
+    moneyAfterReset: gs.resources.money.toString(),
+  });
+
+  // 5) Post-prestige reward check
+  const postPrestigeManual = executeManualGenerator(gs, "hardenDevice");
+  log("Post-prestige manual reward", {
+    reward: postPrestigeManual?.outputs.money?.toString(),
+    prestigeMultiplier: gs.prestige.multiplier.toString(),
+  });
+
+  // 6) Timed generator check with scaling stack
+  gs.resources = { ...gs.resources, money: new Decimal(100), crypto: new Decimal(20) };
+  const timedStart = startTimedGenerator(gs, "buildDevice");
+  const timedNone = tickTimedGenerators(gs, 30_000);
+  const timedDone = tickTimedGenerators(gs, 31_000);
+  log("Timed generator progression", {
+    started: timedStart,
+    partialCompletions: timedNone.length,
+    finalCompletions: timedDone.length,
+    finalMoney: gs.resources.money.toString(),
+    stackTotal: timedDone[0]?.multiplierStack?.total.toString(),
+  });
+
+  // 7) Crypto fluctuation bounds and deterministic behavior
+  const samples = [0, 5000, 10000, 15000, 20000, 30000, 45000, 60000].map((ms) => {
+    const p = getCryptoPrice(ms);
+    const valid = validateCryptoPrice(p).valid;
+    return { ms, price: p.toFixed(6), valid };
+  });
+  log("Crypto price samples", samples);
+
+  // Conversion uses deterministic elapsed override + talent efficiency
+  gs.resources = { ...gs.resources, money: new Decimal(50) };
+  const c1 = convertMoneyToCrypto(gs, new Decimal(10), 15_000);
+  log("Crypto conversion at 15s", {
+    price: c1?.pricePerUnit.toFixed(6),
+    paid: c1?.paid.toString(),
+    received: c1?.received.toString(),
+    efficiencyMultiplier: c1?.efficiencyMultiplier.toString(),
+  });
+
+  // 8) Serialization validation
   const stateValidation = validateGameState(gs);
   const serialized = previewSerializedState(gs);
   const serializedValidation = validateSerializedGameState(serialized);
 
-  log("Serialized resources (scientific notation)", serialized.resources);
+  log("Serialized resources", serialized.resources);
+  log("Serialized prestige", serialized.prestige);
 
   if (stateValidation.valid && serializedValidation.valid) {
     console.log("[sim] ✅ All validations passed");
@@ -105,6 +174,17 @@ export function runSimulation(): void {
       serialized: serializedValidation.errors,
     });
   }
+
+  // 9) Additional deterministic split check for passive generator
+  const gsA = createInitialGameState();
+  const gsB = createInitialGameState();
+  GENERATORS.antiVirus.executePassive(gsA, 1000);
+  for (let i = 0; i < 10; i++) GENERATORS.antiVirus.executePassive(gsB, 100);
+  log("Passive deterministic split check", {
+    oneShot: gsA.resources.reputation.toString(),
+    split: gsB.resources.reputation.toString(),
+    equal: gsA.resources.reputation.eq(gsB.resources.reputation),
+  });
 
   console.log("=== Simulation Complete ===");
 }

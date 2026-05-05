@@ -2,6 +2,7 @@
 import Decimal from "break_eternity.js";
 import type { GameState, ActionDefinition, ActionOutcome } from "./types";
 import { GAME_CONFIG } from "./config";
+import { executeManualGenerator } from "./generators";
 
 export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
   pentestSystem: {
@@ -22,20 +23,27 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
   },
 };
 
+const ACTION_TO_GENERATOR_ID: Record<string, string> = {
+  pentestSystem: "hardenDevice",
+  exploitSystem: "hackDevice",
+};
+
 export function executeAction(gs: GameState, actionId: string): ActionOutcome | null {
   const def = ACTION_DEFINITIONS[actionId];
   if (!def) return null;
 
-  gs.resources = {
-    ...gs.resources,
-    money: gs.resources.money.add(def.baseReward),
-    reputation: gs.resources.reputation.add(def.reputationDelta),
-  };
+  const generatorId = ACTION_TO_GENERATOR_ID[actionId];
+  if (!generatorId) return null;
+  const result = executeManualGenerator(gs, generatorId);
+  if (!result) return null;
+
+  const reward = result.outputs.money ?? new Decimal(0);
+  const reputationDelta = result.reputationDelta ?? new Decimal(0);
 
   return {
     actionId,
-    rewardApplied: def.baseReward,
-    reputationDelta: def.reputationDelta,
+    rewardApplied: reward,
+    reputationDelta,
   };
 }
 

@@ -1,4 +1,3 @@
-// src/core/types.ts
 import Decimal from "break_eternity.js";
 
 export type ResourceKey = "money" | "crypto" | "compute" | "reputation";
@@ -29,6 +28,107 @@ export interface CryptoConversionResult {
   paid: Decimal;
   received: Decimal;
   pricePerUnit: Decimal;
+  efficiencyMultiplier: Decimal;
+}
+
+export type GeneratorType = "manual" | "passive" | "timed";
+
+export type GeneratorModifierMode = "additive" | "multiplicative";
+export type TalentScope = "run" | "permanent";
+
+export interface ResourceGeneratorConfig {
+  id: string;
+  name: string;
+  description: string;
+  type: GeneratorType;
+  path: ActionPath;
+  inputResources?: Partial<Record<ResourceKey, Decimal>>;
+  outputResources: Partial<Record<ResourceKey, Decimal>>;
+  tickIntervalMs?: number;
+  durationMs?: number;
+  level: number;
+  maxLevel: number;
+  levelScaling: number;
+  computeScaling?: {
+    enabled: boolean;
+    baselineCompute: Decimal;
+    exponent: Decimal;
+  };
+  reputationEffect?: Decimal;
+  unlock?: {
+    minReputation?: Decimal;
+    maxReputation?: Decimal;
+  };
+}
+
+export interface TimedGeneratorProgress {
+  generatorId: string;
+  startedAt: number;
+  progressMs: number;
+  completed: boolean;
+}
+
+export interface GeneratorExecuteResult {
+  generatorId: string;
+  outputs: Partial<Record<ResourceKey, Decimal>>;
+  reputationDelta?: Decimal;
+  multiplierStack?: {
+    base: Decimal;
+    level: Decimal;
+    talentUpgrade: Decimal;
+    prestige: Decimal;
+    reputationCompute: Decimal;
+    total: Decimal;
+  };
+}
+
+export interface GeneratorState {
+  levels: Record<string, number>;
+  timedProgress: Record<string, TimedGeneratorProgress>;
+  passiveRemainderMs: Record<string, number>;
+}
+
+export interface GeneratorModifierEffect {
+  mode: GeneratorModifierMode;
+  value: Decimal;
+  generatorTypes?: GeneratorType[];
+  generatorIds?: string[];
+  paths?: ActionPath[];
+  resources?: ResourceKey[];
+}
+
+export interface CryptoModifierEffect {
+  mode: GeneratorModifierMode;
+  value: Decimal;
+}
+
+export interface TalentNodeDefinition {
+  id: string;
+  name: string;
+  description: string;
+  scope: TalentScope;
+  costs: Partial<Record<ResourceKey, Decimal>>;
+  prerequisites?: {
+    allTalentNodeIds?: string[];
+    minReputation?: Decimal;
+    minResources?: Partial<Record<ResourceKey, Decimal>>;
+    requiredGeneratorLevels?: Record<string, number>;
+  };
+  effects: {
+    generatorMultipliers?: GeneratorModifierEffect[];
+    cryptoEfficiency?: CryptoModifierEffect;
+  };
+}
+
+export interface TalentState {
+  runUnlockedById: Record<string, boolean>;
+  permanentUnlockedById: Record<string, boolean>;
+}
+
+export interface PrestigeState {
+  level: Decimal;
+  multiplier: Decimal;
+  cumulativeResources: ResourceMap;
 }
 
 export interface GameState {
@@ -40,6 +140,9 @@ export interface GameState {
     lastTickAt: number;
   };
   log: string[];
+  generators: GeneratorState;
+  talents: TalentState;
+  prestige: PrestigeState;
 }
 
 export interface SerializedGameState {
@@ -49,6 +152,20 @@ export interface SerializedGameState {
     createdAt: number;
     lastSavedAt: number;
     lastTickAt: number;
+  };
+  generators?: {
+    levels: Record<string, number>;
+    timedProgress: Record<string, TimedGeneratorProgress>;
+    passiveRemainderMs: Record<string, number>;
+  };
+  talents?: {
+    runUnlockedById: Record<string, boolean>;
+    permanentUnlockedById: Record<string, boolean>;
+  };
+  prestige?: {
+    level: string;
+    multiplier: string;
+    cumulativeResources: SerializedResourceMap;
   };
 }
 

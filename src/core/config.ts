@@ -1,11 +1,10 @@
-// src/core/config.ts
 import Decimal from "break_eternity.js";
 
-export const VERSION = "2.0.0-baseline";
+export const VERSION = "3.0.0-core-scaling";
 
 export const GAME_CONFIG = {
   serialization: {
-    saveVersion: "1.0.0",
+    saveVersion: "2.0.0",
   },
 
   tickRate: 100,
@@ -25,6 +24,23 @@ export const GAME_CONFIG = {
     },
   },
 
+  scaling: {
+    baseRewardByGeneratorType: {
+      manual: new Decimal(1),
+      passive: new Decimal(1),
+      timed: new Decimal(1),
+    },
+    level: {
+      exponentOffset: 1,
+    },
+    reputation: {
+      enabled: true,
+      influenceStrength: new Decimal(0.25),
+      floorMultiplier: new Decimal(0.1),
+      normalizationRange: new Decimal(100),
+    },
+  },
+
   reputation: {
     whitehatThreshold: new Decimal(100),
     blackhatThreshold: new Decimal(-100),
@@ -36,6 +52,25 @@ export const GAME_CONFIG = {
     pricePeriodMs: 60_000,
     minMultiplier: new Decimal(0.1),
     maxMultiplier: new Decimal(10),
+    noise: {
+      enabled: true,
+      amplitude: new Decimal(0.12),
+      bucketMs: 5000,
+      seed: 1337,
+    },
+  },
+
+  prestige: {
+    eligibility: {
+      trackedResource: "money" as const,
+      baseRequirement: new Decimal(1000),
+      growth: new Decimal(2),
+    },
+    multiplier: {
+      mode: "multiplicative" as "additive" | "multiplicative",
+      base: new Decimal(1),
+      perLevel: new Decimal(0.2),
+    },
   },
 
   actions: {

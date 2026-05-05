@@ -3,17 +3,30 @@ import { shallowReactive } from "vue";
 import type { GameState } from "./types";
 import { VERSION } from "./config";
 import { createInitialResourceMap } from "./resources";
+import { createInitialPrestigeState } from "./progression";
+import { nowMs } from "./clock";
 
 export function createInitialGameState(): GameState {
+  const t0 = nowMs();
   return {
     version: VERSION,
     resources: createInitialResourceMap(),
     timestamps: {
-      createdAt: Date.now(),
-      lastSavedAt: Date.now(),
-      lastTickAt: Date.now(),
+      createdAt: t0,
+      lastSavedAt: t0,
+      lastTickAt: t0,
     },
     log: [],
+    generators: {
+      levels: {},
+      timedProgress: {},
+      passiveRemainderMs: {},
+    },
+    talents: {
+      runUnlockedById: {},
+      permanentUnlockedById: {},
+    },
+    prestige: createInitialPrestigeState(),
   };
 }
 
