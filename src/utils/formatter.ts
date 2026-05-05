@@ -63,3 +63,11 @@ export function formatShort(value: DecimalSource): string {
   }
   return format(value);
 }
+
+/** Force scientific notation for very large values */
+export function formatScientific(value: DecimalSource): string {
+  const d = new Decimal(value);
+  if (Decimal.isNaN(d)) return "NaN";
+  if (!d.isFinite()) return d.sign >= 0 ? "∞" : "-∞";
+  return d.toExponential(3);
+}
