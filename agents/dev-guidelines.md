@@ -1,40 +1,32 @@
-# Gray Protocol — Dev Guidelines
+# Dev Guidelines
 
-## How to Extend Systems Safely
+## How to Modify Safely
 
-### Adding an Activity
-- Add to GAME_CONFIG first, then ACTIVITY_DEFINITIONS. Never the reverse.
-- Set `usesComputeAllocation: true` only if the activity scales with computePower.
-- Add a reputation gate if the activity should be path-locked.
+- Keep core changes in `src/core/*` and keep UI in Vue files.
+- Preserve canonical resource keys: `money`, `crypto`, `compute`, `reputation`.
+- Use `Decimal` for all game-scale values.
+- Use scientific-string serialization in save payloads.
+- Put balance in `src/core/config.ts`.
 
-### Adding Research
-- Add to GAME_CONFIG.research, then RESEARCH_DEFINITIONS.
-- Effects must be one of the supported `ResearchEffectType` values.
-- Add new effect types to `ResearchEffectType` in types.ts if needed.
+## Where to Add Features
 
-### Adding Prestige Layers
-- One layer at a time. Test `canPrestige` / `previewPrestigeGain` / `performPrestige` logic first.
-- Never add prestige logic to the tick loop.
+- Activities: `src/core/activities.ts` + config
+- Research: `src/core/research.ts` + config
+- Prestige: `src/core/prestige.ts` + config
+- Engine behavior: `src/core/engine.ts`
+- Save/migration: `src/core/persistence.ts`
+- Validation: `src/core/validation.ts`
 
-### Extending State
-- Add new fields to `GameState` in `src/core/types.ts`.
-- Update `createInitialGameState()` in `src/core/state.ts`.
-- Update serialization/deserialization in `src/core/persistence.ts`.
+## What Not To Break
 
-## Where to Add New Features
-- New resource types → types.ts, resources.ts, config.ts
-- New scaling formulas → math.ts only
-- New activity logic → activities.ts (referencing config)
-- New research effects → types.ts (ResearchEffectType), research.ts
-- New UI components → src/components/ only, must import from core via public API
+- Deterministic `tick(state, deltaMs)` behavior
+- Offline batching through `calculateOfflineProgress`
+- No persistence side-effects inside tick
+- Canonical key serialization compatibility
+- Legacy key migration path in persistence
 
-## Avoiding Core Contract Breaks
-- Do not import from Vue or DOM in src/core/*.
-- Do not call persistence inside engine tick.
-- Do not use raw number for resource math.
-- Do not hardcode balance values.
+## Build / Typecheck Expectations
 
-## Build/Validation
-- Build: `npm run build` (runs vue-tsc -b && vite build)
-- Dev simulation: import and call `runSimulation()` from `src/dev/simulate.ts` in browser console or a dev page.
-- No test framework configured. Use the simulation harness for sanity checks.
+- Run `npm run build` after changes.
+- Resolve TypeScript errors before finishing.
+- Keep exports/imports synchronized across core modules.

@@ -1,42 +1,46 @@
-# Gray Protocol — Config Spec
+# Config Spec
 
-## GAME_CONFIG Location
-`src/core/config.ts` exports `GAME_CONFIG` as the single source of truth for all balance values.
+Primary balance/config source: `src/core/config.ts`
 
-## Structure
-```
-GAME_CONFIG {
-  tickRate: number          // ms per tick
-  offlineCapMs: number      // max offline time ms
-  resources.starting        // initial ResourceMap values
-  reputation.whithatThreshold / blackhatThreshold
-  activities.<id> {
-    baseCost, baseYieldPerSecond, levelCostScaling, yieldScaling,
-    costScalingRate, yieldScalingRate, maxLevel, reputationGate?
-  }
-  research.<id> {
-    cost, prerequisites, reputationGate?, effects[]
-  }
-  prestige.<id> {
-    requirement, resetsResources, preservesResearch,
-    rewardResource, rewardAmount
-  }
-  scaling { softcapThreshold, softcapPower }
-}
-```
+## GAME_CONFIG Structure
 
-## Adding a New Activity
-1. Add entry to `GAME_CONFIG.activities` with all balance values.
-2. Add `ActivityDefinition` to `ACTIVITY_DEFINITIONS` in `src/core/activities.ts` referencing config.
-3. Do NOT hardcode any numbers inside activities.ts.
+- `serialization.saveVersion`
+- `tickRate`
+- `offlineCapMs`
+- `resources.starting`
+- `resources.display`
+- `reputation` thresholds
+- `activities` definitions + scaling rates
+- `research` definitions + effects
+- `prestige` definitions
+- global scaling knobs
 
-## Adding a New Research Node
-1. Add entry to `GAME_CONFIG.research`.
-2. Add `ResearchNodeDefinition` to `RESEARCH_DEFINITIONS` in `src/core/research.ts`.
+## Resource Display Metadata
 
-## Adding a New Prestige Layer
-1. Add entry to `GAME_CONFIG.prestige`.
-2. Add `PrestigeLayerDefinition` to `PRESTIGE_DEFINITIONS` in `src/core/prestige.ts`.
+Use `GAME_CONFIG.resources.display` for labels/short labels.
 
-## Rule
-Gameplay values (costs, yields, thresholds, rewards, scaling constants) must NEVER be hardcoded inside logic modules. They must always reference `GAME_CONFIG`.
+Core resource identity is always `ResourceKey`; display metadata is presentation-only.
+
+## Adding Activities
+
+1. Add activity values to `GAME_CONFIG.activities`.
+2. Ensure all costs/yields use canonical resource keys.
+3. Wire into `ACTIVITY_DEFINITIONS` in `src/core/activities.ts`.
+4. Keep balance data in config; do not hardcode in engine logic.
+
+## Adding Research
+
+1. Add node in `GAME_CONFIG.research` with cost, prerequisites, effects.
+2. Add entry in `RESEARCH_DEFINITIONS`.
+3. Keep effect behavior config-driven and reused by helper functions.
+
+## Adding Prestige
+
+1. Add layer in `GAME_CONFIG.prestige`.
+2. Add layer mapping in `PRESTIGE_DEFINITIONS`.
+3. Use `performPrestige` reset/reward flow; avoid direct reset logic in unrelated modules.
+
+## Balance Placement Rules
+
+- Costs, yields, rates, gates, thresholds, reward amounts, and caps belong in config.
+- Logic modules should consume config values, not define balance constants inline.

@@ -38,14 +38,32 @@ export function canResearchNode(state: GameState, nodeId: string): boolean {
   const def = RESEARCH_DEFINITIONS[nodeId];
   if (!def) return false;
   if (state.research.completed.has(nodeId)) return false;
-  for (const prereq of def.prerequisites) {
-    if (!state.research.completed.has(prereq)) return false;
-  }
-  if (def.reputationGate) {
-    if (!canAccessReputationGate(state.resources.reputationStanding, def.reputationGate)) return false;
-  }
-  if (!canAffordResources(state.resources, def.cost)) return false;
+  if (!hasResearchPrerequisites(state, nodeId)) return false;
+  if (!passesResearchReputationGate(state, nodeId)) return false;
+  if (!canAffordResearchNode(state, nodeId)) return false;
   return true;
+}
+
+export function hasResearchPrerequisites(state: GameState, nodeId: string): boolean {
+  const def = RESEARCH_DEFINITIONS[nodeId];
+  if (!def) return false;
+  for (const prerequisite of def.prerequisites) {
+    if (!state.research.completed.has(prerequisite)) return false;
+  }
+  return true;
+}
+
+export function passesResearchReputationGate(state: GameState, nodeId: string): boolean {
+  const def = RESEARCH_DEFINITIONS[nodeId];
+  if (!def) return false;
+  if (!def.reputationGate) return true;
+  return canAccessReputationGate(state.resources.reputation, def.reputationGate);
+}
+
+export function canAffordResearchNode(state: GameState, nodeId: string): boolean {
+  const def = RESEARCH_DEFINITIONS[nodeId];
+  if (!def) return false;
+  return canAffordResources(state.resources, def.cost);
 }
 
 export function purchaseResearchNode(state: GameState, nodeId: string): boolean {
@@ -94,6 +112,6 @@ export function applyResearchEffectsToYield(
   state: GameState
 ): Decimal {
   const multipliers = getResearchActivityYieldMultipliers(state);
-  const m = multipliers[activityId] ?? new Decimal(1);
-  return baseYield.mul(m);
+  const activityMultiplier = multipliers[activityId] ?? new Decimal(1);
+  return baseYield.mul(activityMultiplier);
 }

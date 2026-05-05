@@ -56,6 +56,7 @@ export function performPrestige(state: GameState, layerId: string): boolean {
     state.activities[actId].active = false;
     state.activities[actId].unlocked = false;
   }
+  state.allocations.computeByActivityId = {};
 
   // Update prestige layer state
   if (!state.prestige.layers[layerId]) {

@@ -1,54 +1,74 @@
-# Gray Protocol — Domain Models
+# Domain Models
 
-## Resources
-Four Decimal-backed resources live in `state.resources: ResourceMap`:
-- `money` — general currency
-- `cryptoCurrency` — earned from mining/cracking
-- `computePower` — allocatable capacity
-- `reputationStanding` — signed additive; drives alignment
+## ResourceKey
 
-## Reputation
-- Derived from `reputationStanding` Decimal.
-- `> +100` → whitehat, `< -100` → blackhat, otherwise → greyhat.
-- Never clamped. Never stored as an enum. Alignment computed on demand via `getReputationAlignment()`.
-- Gates: `{ min?, max?, alignment? }` — any combination supported.
+`"money" | "crypto" | "compute" | "reputation"`
 
-## Activities
-- Idle production channels with `id, name, path, level, active, unlocked`.
-- Paths: shared, whitehat, blackhat, greyhat.
-- Each tick calculates a `ResourceDelta` (yields + costs) without mutating state directly.
-- Engine aggregates deltas into `state.resources`.
-- `usesComputeAllocation: true` activities are boosted by allocated `computePower`.
-- Sample: `basicCryptoMining`, `bugBountyHunting`, `passwordCracking`.
+## ResourceMap
 
-## ComputePower Allocation
-- `state.allocations.computePowerByActivityId: Record<string, Decimal>`
-- Total allocations cannot exceed `state.resources.computePower`.
-- Set via `setComputeAllocation(state, activityId, amount)`.
-- Allocation boosts yield of compatible activities multiplicatively.
+`Record<ResourceKey, Decimal>`
 
-## Research
-- Nodes with `id, cost, prerequisites, reputationGate, effects`.
-- One-time purchase; stored as `state.research.completed: Set<string>`.
-- Effects: `activityYieldMultiplier`, `computeEfficiencyMultiplier`, etc.
-- Sample: `parallelProcessing`, `responsibleDisclosure`, `exploitAutomation`.
+## GameState
 
-## Prestige
-- Reset layers defined in `PRESTIGE_DEFINITIONS`.
-- One layer: `protocolReset` — requires cryptoCurrency, resets resources, awards computePower bonus.
-- Tracked in `state.prestige.layers: Record<string, PrestigeLayerState>`.
-- Not part of the tick loop; triggered explicitly.
+- `version: string`
+- `resources: ResourceMap`
+- `activities: Record<string, ActivityState>`
+- `research.completed: Set<string>`
+- `prestige.layers: Record<string, PrestigeLayerState>`
+- `allocations.computeByActivityId: Record<string, Decimal>`
+- `timestamps: { createdAt, lastSavedAt, lastTickAt }`
+- `log: string[]`
 
-## State Shape
-```
-GameState {
-  version: string
-  resources: ResourceMap
-  activities: Record<string, ActivityState>
-  research: { completed: Set<string> }
-  prestige: { layers: Record<string, PrestigeLayerState> }
-  allocations: { computePowerByActivityId: Record<string, Decimal> }
-  timestamps: { createdAt, lastSavedAt, lastTickAt }
-  log: string[]
-}
-```
+## ActivityDefinition
+
+- Stable `id`
+- `path`
+- `baseCost`, `baseYieldPerSecond`
+- scaling config (`levelCostScaling`, `yieldScaling`, rates)
+- optional `reputationGate`
+- optional `unlockRequirements`
+- optional `consumesPerSecond`
+- `usesComputeAllocation`
+
+## ResearchNode
+
+`ResearchNodeDefinition` supports:
+
+- id/name/description
+- cost
+- prerequisites
+- optional reputation gate
+- config-driven effects
+
+## PrestigeLayer
+
+`PrestigeLayerDefinition` supports:
+
+- id/name/description
+- requirement
+- reset targets
+- research preservation toggle
+- reward resource + reward amount
+
+## ReputationGate
+
+Supports optional:
+
+- `min`
+- `max`
+- `alignment`
+
+## Serialized Save Model
+
+Top-level save envelope:
+
+- `version`
+- `createdAt`
+- `updatedAt`
+- `payload`
+
+Decoded `payload` is `SerializedGameState`:
+
+- canonical `resources` as scientific strings
+- activities/research/prestige/allocations/timestamps
+- `allocations.computeByActivityId` values as scientific strings

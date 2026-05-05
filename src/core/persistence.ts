@@ -1,230 +1,269 @@
-// src/core/persistence.ts
 import Decimal from "break_eternity.js";
 import { state, pushLog, createInitialGameState } from "./state";
-import { VERSION } from "./config";
-import type { GameState, SaveFile } from "./types";
-import { validateSaveFile } from "./validation";
+import { GAME_CONFIG, VERSION } from "./config";
+import type { GameState, SaveFile, SerializedGameState, SerializedResourceMap } from "./types";
+import { deserializeDecimal, deserializeResourceMap, serializeDecimal, serializeResourceMap } from "./math";
 import { repairResourceMap } from "./resources";
+import { validateSaveFile, validateSerializedGameState } from "./validation";
 
-const SAVE_KEY = "gray_protocol_save_v2";
-
-// ─── Codec ───────────────────────────────────────────────────────────────────
+const SAVE_KEY = "gray_protocol_save_v3";
+const LEGACY_SAVE_KEYS = ["gray_protocol_save_v2"];
 
 export interface SaveCodec {
-  encodeValue(value: Decimal): string;
-  decodeValue(encoded: string): Decimal;
+  encodePayload(payload: string): string;
+  decodePayload(payload: string): string;
 }
 
-export const base64Codec: SaveCodec = {
-  encodeValue(value: Decimal): string {
-    return btoa(value.toString());
+export const base64PayloadCodec: SaveCodec = {
+  encodePayload(payload: string): string {
+    return btoa(payload);
   },
-  decodeValue(encoded: string): Decimal {
-    try {
-      return new Decimal(atob(encoded));
-    } catch {
-      return new Decimal(0);
-    }
+  decodePayload(payload: string): string {
+    return atob(payload);
   },
 };
 
-let activeCodec: SaveCodec = base64Codec;
+let activeCodec: SaveCodec = base64PayloadCodec;
 
 export function setSaveCodec(codec: SaveCodec): void {
   activeCodec = codec;
 }
 
-// ─── Serialisation ───────────────────────────────────────────────────────────
-
-interface SerializedResources {
-  money: string;
-  cryptoCurrency: string;
-  computePower: string;
-  reputationStanding: string;
-}
-
-interface SerializedActivityState {
-  id: string;
-  level: number;
-  unlocked: boolean;
-  active: boolean;
-}
-
-interface SerializedPrestigeLayerState {
-  id: string;
-  timesCompleted: number;
-  totalRewardsEarned: string;
-}
-
-interface SerializedGameState {
-  version: string;
-  resources: SerializedResources;
-  activities: Record<string, SerializedActivityState>;
-  researchCompleted: string[];
-  prestigeLayers: Record<string, SerializedPrestigeLayerState>;
-  allocations: Record<string, string>;
-  timestamps: {
-    createdAt: number;
-    lastSavedAt: number;
-    lastTickAt: number;
-  };
-}
-
 function serializeState(gs: GameState): SerializedGameState {
   return {
     version: gs.version,
-    resources: {
-      money: activeCodec.encodeValue(gs.resources.money),
-      cryptoCurrency: activeCodec.encodeValue(gs.resources.cryptoCurrency),
-      computePower: activeCodec.encodeValue(gs.resources.computePower),
-      reputationStanding: activeCodec.encodeValue(gs.resources.reputationStanding),
-    },
-    activities: Object.fromEntries(
-      Object.entries(gs.activities).map(([id, a]) => [id, { ...a }])
-    ),
+    resources: serializeResourceMap(gs.resources),
+    activities: Object.fromEntries(Object.entries(gs.activities).map(([id, activity]) => [id, { ...activity }])),
     researchCompleted: Array.from(gs.research.completed),
     prestigeLayers: Object.fromEntries(
-      Object.entries(gs.prestige.layers).map(([id, p]) => [
+      Object.entries(gs.prestige.layers).map(([id, layer]) => [
         id,
         {
-          id: p.id,
-          timesCompleted: p.timesCompleted,
-          totalRewardsEarned: activeCodec.encodeValue(p.totalRewardsEarned),
+          id: layer.id,
+          timesCompleted: layer.timesCompleted,
+          totalRewardsEarned: serializeDecimal(layer.totalRewardsEarned),
         },
       ])
     ),
-    allocations: Object.fromEntries(
-      Object.entries(gs.allocations.computePowerByActivityId).map(([id, v]) => [
-        id,
-        activeCodec.encodeValue(v),
-      ])
-    ),
-    timestamps: { ...gs.timestamps, lastSavedAt: Date.now() },
+    allocations: {
+      computeByActivityId: Object.fromEntries(
+        Object.entries(gs.allocations.computeByActivityId).map(([activityId, amount]) => [
+          activityId,
+          serializeDecimal(amount),
+        ])
+      ),
+    },
+    timestamps: {
+      ...gs.timestamps,
+      lastSavedAt: Date.now(),
+    },
   };
 }
 
-function deserializeState(data: SerializedGameState, target: GameState): void {
-  target.version = data.version ?? VERSION;
-
-  target.resources = {
-    money: activeCodec.decodeValue(data.resources.money),
-    cryptoCurrency: activeCodec.decodeValue(data.resources.cryptoCurrency),
-    computePower: activeCodec.decodeValue(data.resources.computePower),
-    reputationStanding: activeCodec.decodeValue(data.resources.reputationStanding),
+function migrateLegacyResourceKeys(raw: Record<string, unknown>): SerializedResourceMap {
+  const fromLegacy = (legacyKey: string): string | undefined => {
+    const candidate = raw[legacyKey];
+    return typeof candidate === "string" ? candidate : undefined;
   };
-  target.resources = repairResourceMap(target.resources);
 
-  const initialActs = createInitialGameState().activities;
-  target.activities = { ...initialActs };
-  for (const [id, a] of Object.entries(data.activities ?? {})) {
-    const sa = a as SerializedActivityState;
-    target.activities[id] = {
-      id: sa.id,
-      level: typeof sa.level === "number" ? sa.level : 0,
-      unlocked: Boolean(sa.unlocked),
-      active: Boolean(sa.active),
-    };
+  return {
+    money: typeof raw["money"] === "string" ? (raw["money"] as string) : "0",
+    crypto:
+      typeof raw["crypto"] === "string"
+        ? (raw["crypto"] as string)
+        : fromLegacy("cryptoCurrency") ?? "0",
+    compute:
+      typeof raw["compute"] === "string"
+        ? (raw["compute"] as string)
+        : fromLegacy("computePower") ?? "0",
+    reputation:
+      typeof raw["reputation"] === "string"
+        ? (raw["reputation"] as string)
+        : fromLegacy("reputationStanding") ?? "0",
+  };
+}
+
+function repairSerializedState(raw: SerializedGameState): SerializedGameState {
+  const repairedResources = migrateLegacyResourceKeys(raw.resources as unknown as Record<string, unknown>);
+
+  const allocationsRaw = raw.allocations?.computeByActivityId;
+  let repairedAllocations: Record<string, string> = {};
+
+  if (allocationsRaw && typeof allocationsRaw === "object") {
+    repairedAllocations = Object.fromEntries(
+      Object.entries(allocationsRaw).map(([activityId, amount]) => {
+        const serialized = typeof amount === "string" ? amount : "0";
+        return [activityId, serializeDecimal(deserializeDecimal(serialized))];
+      })
+    );
   }
 
-  target.research.completed = new Set(data.researchCompleted ?? []);
+  return {
+    ...raw,
+    version: typeof raw.version === "string" ? raw.version : VERSION,
+    resources: {
+      money: serializeDecimal(deserializeDecimal(repairedResources.money)),
+      crypto: serializeDecimal(deserializeDecimal(repairedResources.crypto)),
+      compute: serializeDecimal(deserializeDecimal(repairedResources.compute)),
+      reputation: serializeDecimal(deserializeDecimal(repairedResources.reputation)),
+    },
+    activities: raw.activities ?? {},
+    researchCompleted: Array.isArray(raw.researchCompleted) ? raw.researchCompleted : [],
+    prestigeLayers: raw.prestigeLayers ?? {},
+    allocations: { computeByActivityId: repairedAllocations },
+    timestamps: {
+      createdAt: raw.timestamps?.createdAt ?? Date.now(),
+      lastSavedAt: raw.timestamps?.lastSavedAt ?? Date.now(),
+      lastTickAt: raw.timestamps?.lastTickAt ?? Date.now(),
+    },
+  };
+}
 
-  target.prestige.layers = {};
-  for (const [id, p] of Object.entries(data.prestigeLayers ?? {})) {
-    const sp = p as SerializedPrestigeLayerState;
-    target.prestige.layers[id] = {
-      id: sp.id,
-      timesCompleted: typeof sp.timesCompleted === "number" ? sp.timesCompleted : 0,
-      totalRewardsEarned: activeCodec.decodeValue(sp.totalRewardsEarned),
-    };
-  }
+function deserializeState(serialized: SerializedGameState, target: GameState): void {
+  const repaired = repairSerializedState(serialized);
+  target.version = repaired.version;
+  target.resources = repairResourceMap(deserializeResourceMap(repaired.resources));
 
-  target.allocations.computePowerByActivityId = {};
-  for (const [id, v] of Object.entries(data.allocations ?? {})) {
-    target.allocations.computePowerByActivityId[id] = activeCodec.decodeValue(v as string);
-  }
+  const initialActivities = createInitialGameState().activities;
+  target.activities = { ...initialActivities, ...repaired.activities };
+
+  target.research.completed = new Set(repaired.researchCompleted);
+  target.prestige.layers = Object.fromEntries(
+    Object.entries(repaired.prestigeLayers).map(([id, layer]) => [
+      id,
+      {
+        id: layer.id,
+        timesCompleted: layer.timesCompleted,
+        totalRewardsEarned: deserializeDecimal(layer.totalRewardsEarned),
+      },
+    ])
+  );
+
+  target.allocations.computeByActivityId = Object.fromEntries(
+    Object.entries(repaired.allocations.computeByActivityId).map(([activityId, amount]) => [
+      activityId,
+      deserializeDecimal(amount),
+    ])
+  );
 
   target.timestamps = {
-    createdAt: data.timestamps?.createdAt ?? Date.now(),
-    lastSavedAt: data.timestamps?.lastSavedAt ?? Date.now(),
-    lastTickAt: data.timestamps?.lastTickAt ?? Date.now(),
+    ...repaired.timestamps,
   };
 }
 
 function wrapSaveFile(serialized: SerializedGameState): SaveFile {
   const now = Date.now();
   return {
-    version: VERSION,
+    version: GAME_CONFIG.serialization.saveVersion,
     createdAt: serialized.timestamps.createdAt,
     updatedAt: now,
-    payload: btoa(JSON.stringify(serialized)),
+    payload: activeCodec.encodePayload(JSON.stringify(serialized)),
   };
 }
 
 function unwrapSaveFile(saveFile: SaveFile): SerializedGameState {
-  return JSON.parse(atob(saveFile.payload)) as SerializedGameState;
+  return JSON.parse(activeCodec.decodePayload(saveFile.payload)) as SerializedGameState;
 }
-
-// ─── Public API ──────────────────────────────────────────────────────────────
 
 export function saveGame(): void {
   try {
     const serialized = serializeState(state);
+    const validation = validateSerializedGameState(serialized);
+    if (!validation.valid) {
+      pushLog(`Save aborted: ${validation.errors.join(", ")}`);
+      return;
+    }
+
     const saveFile = wrapSaveFile(serialized);
     localStorage.setItem(SAVE_KEY, JSON.stringify(saveFile));
     state.timestamps.lastSavedAt = Date.now();
-    pushLog("💾 Game saved.");
-  } catch (err) {
-    pushLog(`⚠ Save failed: ${String(err)}`);
+    pushLog("Game saved");
+  } catch (error) {
+    pushLog(`Save failed: ${String(error)}`);
   }
 }
 
 export function loadGame(): boolean {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    let raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) {
+      for (const legacyKey of LEGACY_SAVE_KEYS) {
+        raw = localStorage.getItem(legacyKey);
+        if (raw) break;
+      }
+    }
     if (!raw) return false;
 
-    const saveFile = JSON.parse(raw) as unknown;
-    const vr = validateSaveFile(saveFile);
-    if (!vr.valid) {
-      pushLog(`⚠ Save invalid: ${vr.errors.join(", ")}`);
+    const parsed = JSON.parse(raw) as unknown;
+    const fileValidation = validateSaveFile(parsed);
+    if (!fileValidation.valid) {
+      pushLog(`Save invalid: ${fileValidation.errors.join(", ")}`);
       return false;
     }
 
-    const serialized = unwrapSaveFile(saveFile as SaveFile);
+    const serialized = unwrapSaveFile(parsed as SaveFile);
+    const validation = validateSerializedGameState(serialized);
+    if (!validation.valid) {
+      pushLog(`Save payload invalid: ${validation.errors.join(", ")}`);
+      return false;
+    }
+
     deserializeState(serialized, state);
-    pushLog("📂 Game loaded.");
+    pushLog("Game loaded");
     return true;
-  } catch (err) {
-    pushLog(`⚠ Load failed: ${String(err)}`);
+  } catch (error) {
+    pushLog(`Load failed: ${String(error)}`);
     return false;
   }
 }
 
 export function exportSave(): string {
   const serialized = serializeState(state);
-  const saveFile = wrapSaveFile(serialized);
-  return btoa(JSON.stringify(saveFile));
+  const wrapped = wrapSaveFile(serialized);
+  return btoa(JSON.stringify(wrapped));
 }
 
 export function importSave(raw: string): boolean {
   try {
-    const saveFile = JSON.parse(atob(raw.trim())) as unknown;
-    const vr = validateSaveFile(saveFile);
-    if (!vr.valid) {
-      pushLog(`⚠ Import invalid: ${vr.errors.join(", ")}`);
+    const wrapped = JSON.parse(atob(raw.trim())) as unknown;
+    const fileValidation = validateSaveFile(wrapped);
+    if (!fileValidation.valid) {
+      pushLog(`Import invalid: ${fileValidation.errors.join(", ")}`);
       return false;
     }
-    const serialized = unwrapSaveFile(saveFile as SaveFile);
+
+    const serialized = unwrapSaveFile(wrapped as SaveFile);
+    const validation = validateSerializedGameState(serialized);
+    if (!validation.valid) {
+      pushLog(`Import payload invalid: ${validation.errors.join(", ")}`);
+      return false;
+    }
+
     deserializeState(serialized, state);
-    pushLog("📥 Save imported successfully.");
+    pushLog("Save imported");
     return true;
-  } catch (err) {
-    pushLog(`⚠ Import failed: ${String(err)}`);
+  } catch (error) {
+    pushLog(`Import failed: ${String(error)}`);
     return false;
   }
 }
 
 export function validateSave(raw: unknown): boolean {
-  const vr = validateSaveFile(raw);
-  return vr.valid;
+  const fileValidation = validateSaveFile(raw);
+  if (!fileValidation.valid) return false;
+
+  try {
+    const serialized = unwrapSaveFile(raw as SaveFile);
+    return validateSerializedGameState(serialized).valid;
+  } catch {
+    return false;
+  }
+}
+
+export function previewSerializedState(gs: GameState): SerializedGameState {
+  return serializeState(gs);
+}
+
+export function serializeDecimalForDebug(value: Decimal): string {
+  return serializeDecimal(value);
 }

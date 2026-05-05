@@ -1,9 +1,10 @@
 // src/core/types.ts
 import Decimal from "break_eternity.js";
 
-export type ResourceKey = "money" | "cryptoCurrency" | "computePower" | "reputationStanding";
+export type ResourceKey = "money" | "crypto" | "compute" | "reputation";
 
 export type ResourceMap = Record<ResourceKey, Decimal>;
+export type SerializedResourceMap = Record<ResourceKey, string>;
 
 export type ReputationAlignment = "whitehat" | "greyhat" | "blackhat";
 
@@ -24,6 +25,8 @@ export interface ActivityDefinition {
   description: string;
   baseCost: Partial<ResourceMap>;
   baseYieldPerSecond: Partial<ResourceMap>;
+  costScalingRate: Decimal;
+  yieldScalingRate: Decimal;
   levelCostScaling: ScalingType;
   yieldScaling: ScalingType;
   maxLevel: number;
@@ -81,7 +84,11 @@ export interface PrestigeLayerState {
 }
 
 export interface AllocationMap {
-  computePowerByActivityId: Record<string, Decimal>;
+  computeByActivityId: Record<string, Decimal>;
+}
+
+export interface SerializedAllocationMap {
+  computeByActivityId: Record<string, string>;
 }
 
 export interface ResourceDelta {
@@ -112,5 +119,26 @@ export interface SaveFile {
   version: string;
   createdAt: number;
   updatedAt: number;
-  payload: string; // Base64-encoded
+  payload: string;
+}
+
+export interface SerializedGameState {
+  version: string;
+  resources: SerializedResourceMap;
+  activities: Record<string, ActivityState>;
+  researchCompleted: string[];
+  prestigeLayers: Record<
+    string,
+    {
+      id: string;
+      timesCompleted: number;
+      totalRewardsEarned: string;
+    }
+  >;
+  allocations: SerializedAllocationMap;
+  timestamps: {
+    createdAt: number;
+    lastSavedAt: number;
+    lastTickAt: number;
+  };
 }

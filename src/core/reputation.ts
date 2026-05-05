@@ -20,6 +20,7 @@ export function canAccessReputationGate(rep: Decimal, gate: ReputationGate): boo
   return true;
 }
 
-export function applyReputationDelta(state: GameState, delta: Decimal): void {
-  state.resources.reputationStanding = state.resources.reputationStanding.add(delta);
+export function applyReputationDelta(state: GameState, delta: Decimal): GameState {
+  state.resources.reputation = state.resources.reputation.add(delta);
+  return state;
 }

@@ -4,26 +4,21 @@ import type { ResourceKey, ResourceMap } from "./types";
 import { GAME_CONFIG } from "./config";
 import { safeDecimal } from "./math";
 
-export const RESOURCE_DISPLAY_NAMES: Record<ResourceKey, string> = {
-  money: "$Money",
-  cryptoCurrency: "CryptoCurrency",
-  computePower: "ComputePower",
-  reputationStanding: "ReputationStanding",
-};
+export const RESOURCE_DISPLAY_METADATA = GAME_CONFIG.resources.display;
 
 export const ALL_RESOURCE_KEYS: ResourceKey[] = [
   "money",
-  "cryptoCurrency",
-  "computePower",
-  "reputationStanding",
+  "crypto",
+  "compute",
+  "reputation",
 ];
 
 export function createEmptyResourceMap(): ResourceMap {
   return {
     money: new Decimal(0),
-    cryptoCurrency: new Decimal(0),
-    computePower: new Decimal(0),
-    reputationStanding: new Decimal(0),
+    crypto: new Decimal(0),
+    compute: new Decimal(0),
+    reputation: new Decimal(0),
   };
 }
 
@@ -31,9 +26,9 @@ export function createInitialResourceMap(): ResourceMap {
   const s = GAME_CONFIG.resources.starting;
   return {
     money: new Decimal(s.money),
-    cryptoCurrency: new Decimal(s.cryptoCurrency),
-    computePower: new Decimal(s.computePower),
-    reputationStanding: new Decimal(s.reputationStanding),
+    crypto: new Decimal(s.crypto),
+    compute: new Decimal(s.compute),
+    reputation: new Decimal(s.reputation),
   };
 }
 

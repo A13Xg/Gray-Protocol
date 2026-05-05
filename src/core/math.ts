@@ -1,5 +1,6 @@
 // src/core/math.ts
 import Decimal, { type DecimalSource } from "break_eternity.js";
+import type { ResourceMap, SerializedResourceMap } from "./types";
 
 export function toDecimal(value: DecimalSource): Decimal {
   return new Decimal(value);
@@ -22,6 +23,41 @@ export function isValidDecimal(value: unknown): boolean {
   } catch {
     return false;
   }
+}
+
+export function serializeDecimal(value: Decimal): string {
+  if (!value.isFinite() || Decimal.isNaN(value)) return "0";
+  if (value.eq(0)) return "0";
+  return value.toExponential(12);
+}
+
+export function deserializeDecimal(value: string): Decimal {
+  if (typeof value !== "string" || value.trim().length === 0) return new Decimal(0);
+  try {
+    const parsed = new Decimal(value.trim());
+    if (!parsed.isFinite() || Decimal.isNaN(parsed)) return new Decimal(0);
+    return parsed;
+  } catch {
+    return new Decimal(0);
+  }
+}
+
+export function serializeResourceMap(resources: ResourceMap): SerializedResourceMap {
+  return {
+    money: serializeDecimal(resources.money),
+    crypto: serializeDecimal(resources.crypto),
+    compute: serializeDecimal(resources.compute),
+    reputation: serializeDecimal(resources.reputation),
+  };
+}
+
+export function deserializeResourceMap(resources: SerializedResourceMap): ResourceMap {
+  return {
+    money: deserializeDecimal(resources.money),
+    crypto: deserializeDecimal(resources.crypto),
+    compute: deserializeDecimal(resources.compute),
+    reputation: deserializeDecimal(resources.reputation),
+  };
 }
 
 export function scaleLinear(base: DecimalSource, level: DecimalSource, rate: DecimalSource): Decimal {

@@ -4,15 +4,25 @@ import Decimal from "break_eternity.js";
 export const VERSION = "1.1.0-alpha";
 
 export const GAME_CONFIG = {
-  tickRate: 100,        // ms per tick (10 FPS)
-  offlineCapMs: 86_400_000, // 24 hours in ms
+  serialization: {
+    saveVersion: "2.0.0",
+  },
+
+  tickRate: 100,
+  offlineCapMs: 86_400_000,
 
   resources: {
     starting: {
       money: new Decimal(10),
-      cryptoCurrency: new Decimal(0),
-      computePower: new Decimal(10),
-      reputationStanding: new Decimal(0),
+      crypto: new Decimal(0),
+      compute: new Decimal(10),
+      reputation: new Decimal(0),
+    },
+    display: {
+      money: { label: "$Money", shortLabel: "$" },
+      crypto: { label: "Crypto Coins", shortLabel: "CR" },
+      compute: { label: "Compute Resources", shortLabel: "CPU" },
+      reputation: { label: "Reputation", shortLabel: "REP" },
     },
   },
 
@@ -23,8 +33,8 @@ export const GAME_CONFIG = {
 
   activities: {
     basicCryptoMining: {
-      baseCost: { computePower: new Decimal(1) },
-      baseYieldPerSecond: { cryptoCurrency: new Decimal(0.5) },
+      baseCost: { compute: new Decimal(1) },
+      baseYieldPerSecond: { crypto: new Decimal(0.5) },
       levelCostScaling: "exponential" as const,
       yieldScaling: "linear" as const,
       costScalingRate: new Decimal(1.15),
@@ -33,30 +43,30 @@ export const GAME_CONFIG = {
     },
     bugBountyHunting: {
       baseCost: { money: new Decimal(5) },
-      baseYieldPerSecond: { money: new Decimal(2), reputationStanding: new Decimal(0.1) },
+      baseYieldPerSecond: { money: new Decimal(2), reputation: new Decimal(0.1) },
       levelCostScaling: "exponential" as const,
       yieldScaling: "linear" as const,
       costScalingRate: new Decimal(1.2),
       yieldScalingRate: new Decimal(0.15),
       maxLevel: 100,
-      reputationGate: { min: new Decimal(-100) }, // greyhat or higher = not full blackhat
+      reputationGate: { min: new Decimal(-100) },
     },
     passwordCracking: {
-      baseCost: { computePower: new Decimal(2) },
-      baseYieldPerSecond: { money: new Decimal(1), cryptoCurrency: new Decimal(0.3), reputationStanding: new Decimal(-0.2) },
-      consumesPerSecond: { computePower: new Decimal(0.01) },
+      baseCost: { compute: new Decimal(2) },
+      baseYieldPerSecond: { money: new Decimal(1), crypto: new Decimal(0.3), reputation: new Decimal(-0.2) },
+      consumesPerSecond: { compute: new Decimal(0.01) },
       levelCostScaling: "exponential" as const,
       yieldScaling: "linear" as const,
       costScalingRate: new Decimal(1.18),
       yieldScalingRate: new Decimal(0.12),
       maxLevel: 100,
-      reputationGate: { max: new Decimal(100) }, // not full whitehat
+      reputationGate: { max: new Decimal(100) },
     },
   },
 
   research: {
     parallelProcessing: {
-      cost: { computePower: new Decimal(20) },
+      cost: { compute: new Decimal(20) },
       prerequisites: [] as string[],
       effects: [{ type: "computeEfficiencyMultiplier" as const, value: new Decimal(1.5) }],
     },
@@ -67,7 +77,7 @@ export const GAME_CONFIG = {
       effects: [{ type: "activityYieldMultiplier" as const, target: "bugBountyHunting", value: new Decimal(2) }],
     },
     exploitAutomation: {
-      cost: { cryptoCurrency: new Decimal(10) },
+      cost: { crypto: new Decimal(10) },
       prerequisites: [] as string[],
       reputationGate: { max: new Decimal(0) },
       effects: [{ type: "activityYieldMultiplier" as const, target: "passwordCracking", value: new Decimal(2) }],
@@ -76,10 +86,10 @@ export const GAME_CONFIG = {
 
   prestige: {
     protocolReset: {
-      requirement: { cryptoCurrency: new Decimal(1000) },
-      resetsResources: ["money", "cryptoCurrency", "computePower"] as const,
+      requirement: { crypto: new Decimal(1000) },
+      resetsResources: ["money", "crypto", "compute"] as const,
       preservesResearch: false,
-      rewardResource: "computePower" as const,
+      rewardResource: "compute" as const,
       rewardAmount: new Decimal(25),
     },
   },
@@ -89,7 +99,3 @@ export const GAME_CONFIG = {
     softcapPower: new Decimal(0.5),
   },
 } as const;
-
-// Legacy compat exports
-export const TICK_RATE = GAME_CONFIG.tickRate;
-export const OFFLINE_CAP = GAME_CONFIG.offlineCapMs / 1000;

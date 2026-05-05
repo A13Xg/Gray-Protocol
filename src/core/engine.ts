@@ -1,141 +1,113 @@
-// src/core/engine.ts
 import Decimal, { type DecimalSource } from "break_eternity.js";
 import { state, pushLog } from "./state";
 import { GAME_CONFIG } from "./config";
 import type { GameState, ResourceKey } from "./types";
-import { canAffordResources, applyResourceCost, addResourceMaps, subtractResourceMaps } from "./resources";
-import { calculateActivityDelta, ACTIVITY_DEFINITIONS } from "./activities";
-import { getResearchActivityYieldMultipliers } from "./research";
+import { addResourceMaps, applyResourceCost, canAffordResources, createEmptyResourceMap, subtractResourceMaps } from "./resources";
+import { ACTIVITY_DEFINITIONS, getActiveActivityDeltas } from "./activities";
+import { getResearchActivityYieldMultipliers, getResearchComputeEfficiencyMultiplier } from "./research";
 
-// ─── Legacy compat types (used by persistence and UI) ────────────────────────
 export type { ResourceKey };
 export type MultiCost = Partial<Record<ResourceKey, DecimalSource>>;
 
-// ─── Compute Allocation ───────────────────────────────────────────────────────
-
 export function getTotalAllocatedCompute(gs: GameState): Decimal {
   let total = new Decimal(0);
-  for (const v of Object.values(gs.allocations.computePowerByActivityId)) {
-    total = total.add(v);
+  for (const amount of Object.values(gs.allocations.computeByActivityId)) {
+    total = total.add(amount);
   }
   return total;
 }
 
 export function getAvailableCompute(gs: GameState): Decimal {
-  return gs.resources.computePower.sub(getTotalAllocatedCompute(gs));
+  return Decimal.max(new Decimal(0), gs.resources.compute.sub(getTotalAllocatedCompute(gs)));
 }
 
 export function getComputeAllocationForActivity(gs: GameState, activityId: string): Decimal {
-  return gs.allocations.computePowerByActivityId[activityId] ?? new Decimal(0);
+  return gs.allocations.computeByActivityId[activityId] ?? new Decimal(0);
 }
 
 export function setComputeAllocation(gs: GameState, activityId: string, amount: Decimal): boolean {
   if (!(activityId in ACTIVITY_DEFINITIONS)) return false;
-  const current = getComputeAllocationForActivity(gs, activityId);
-  const diff = amount.sub(current);
-  const available = getAvailableCompute(gs);
-  if (diff.gt(available)) return false;
-  gs.allocations.computePowerByActivityId[activityId] = Decimal.max(new Decimal(0), amount);
-  return true;
-}
 
-// ─── Legacy compat helpers (used by old persistence) ─────────────────────────
+  const sanitizedTarget = Decimal.max(new Decimal(0), amount);
+  const current = getComputeAllocationForActivity(gs, activityId);
+  const totalWithoutCurrent = getTotalAllocatedCompute(gs).sub(current);
+  const maxAllowed = Decimal.max(new Decimal(0), gs.resources.compute.sub(totalWithoutCurrent));
+  const clamped = Decimal.min(sanitizedTarget, maxAllowed);
+
+  gs.allocations.computeByActivityId[activityId] = clamped;
+  return clamped.eq(sanitizedTarget);
+}
 
 export function canAfford(costs: MultiCost): boolean {
   const mapped: Partial<Record<ResourceKey, Decimal>> = {};
-  for (const [k, v] of Object.entries(costs)) {
-    mapped[k as ResourceKey] = new Decimal(v as DecimalSource);
+  for (const [key, value] of Object.entries(costs)) {
+    mapped[key as ResourceKey] = new Decimal(value as DecimalSource);
   }
   return canAffordResources(state.resources, mapped);
 }
 
 export function purchase(costs: MultiCost): boolean {
   const mapped: Partial<Record<ResourceKey, Decimal>> = {};
-  for (const [k, v] of Object.entries(costs)) {
-    mapped[k as ResourceKey] = new Decimal(v as DecimalSource);
+  for (const [key, value] of Object.entries(costs)) {
+    mapped[key as ResourceKey] = new Decimal(value as DecimalSource);
   }
   if (!canAffordResources(state.resources, mapped)) return false;
   state.resources = applyResourceCost(state.resources, mapped);
   return true;
 }
 
-// ─── Tick ─────────────────────────────────────────────────────────────────────
-
 export function tick(gs: GameState, deltaMs: number): void {
-  const deltaSeconds = deltaMs / 1000;
-  const researchMults = getResearchActivityYieldMultipliers(gs);
+  const deltaSeconds = new Decimal(deltaMs).div(1000);
+  const researchMultipliers = getResearchActivityYieldMultipliers(gs);
+  const computeEfficiency = getResearchComputeEfficiencyMultiplier(gs);
+  const activityDeltas = getActiveActivityDeltas(gs, deltaSeconds, researchMultipliers, computeEfficiency);
 
-  for (const activityId of Object.keys(gs.activities)) {
-    const actState = gs.activities[activityId];
-    if (!actState.active) continue;
+  for (const activityId of Object.keys(activityDeltas)) {
+    const activityState = gs.activities[activityId];
+    const delta = activityDeltas[activityId];
+    if (!activityState?.active) continue;
 
-    const delta = calculateActivityDelta(gs, activityId, deltaSeconds, researchMults);
-
-    // Apply yields
-    gs.resources = addResourceMaps(gs.resources, delta.yields as Record<string, Decimal>);
-
-    // Apply costs/consumption
-    for (const [key, amount] of Object.entries(delta.costs)) {
-      const rk = key as ResourceKey;
-      const cost = new Decimal(amount);
-      if (cost.gt(0)) {
-        if (gs.resources[rk].lt(cost)) {
-          // Can't afford consumption, deactivate
-          actState.active = false;
-          pushLog(`⚠ ${activityId} deactivated: insufficient ${key}`);
-          break;
-        }
-        gs.resources = subtractResourceMaps(gs.resources, { [rk]: cost } as Partial<Record<ResourceKey, Decimal>>);
-      }
+    if (!canAffordResources(gs.resources, delta.costs)) {
+      activityState.active = false;
+      continue;
     }
+
+    gs.resources = addResourceMaps(gs.resources, delta.yields);
+    gs.resources = subtractResourceMaps(gs.resources, delta.costs);
   }
 
-  gs.timestamps.lastTickAt = Date.now();
+  gs.timestamps.lastTickAt += deltaMs;
 }
-
-// ─── Offline Progress ─────────────────────────────────────────────────────────
 
 export function calculateOfflineProgress(gs: GameState, elapsedMs: number): void {
   const cappedMs = Math.min(elapsedMs, GAME_CONFIG.offlineCapMs);
-  if (cappedMs < 1000) return;
-
-  const ticks = Math.floor(cappedMs / GAME_CONFIG.tickRate);
-  const deltaPerTick = GAME_CONFIG.tickRate;
-  for (let i = 0; i < ticks; i++) {
-    tick(gs, deltaPerTick);
-  }
-  pushLog(`⚡ Offline catch-up: ${Math.floor(cappedMs / 1000)}s (${ticks} ticks)`);
+  if (cappedMs <= 0) return;
+  tick(gs, cappedMs);
 }
-
-// ─── Compat wrapper for old processOffline signature ─────────────────────────
 
 export function processOffline(): void {
   const now = Date.now();
-  const elapsed = now - state.timestamps.lastSavedAt;
-  calculateOfflineProgress(state, elapsed);
+  const elapsedMs = now - state.timestamps.lastSavedAt;
+  calculateOfflineProgress(state, elapsedMs);
   state.timestamps.lastSavedAt = now;
 }
 
-// ─── Game Loop ────────────────────────────────────────────────────────────────
-
 let lastTimestamp = 0;
-let accumulated = 0;
+let accumulatedMs = 0;
 let rafHandle = 0;
 
 function loop(timestamp: number): void {
-  if (lastTimestamp === 0) lastTimestamp = timestamp;
-  const delta = timestamp - lastTimestamp;
-  lastTimestamp = timestamp;
-  accumulated += delta;
+  if (lastTimestamp === 0) {
+    lastTimestamp = timestamp;
+  }
 
-  while (accumulated >= GAME_CONFIG.tickRate) {
-    try {
-      tick(state, GAME_CONFIG.tickRate);
-    } catch (err) {
-      pushLog(`⛔ Game loop halted: ${String(err)}`);
-      return;
-    }
-    accumulated -= GAME_CONFIG.tickRate;
+  const frameDelta = timestamp - lastTimestamp;
+  lastTimestamp = timestamp;
+  accumulatedMs += frameDelta;
+
+  while (accumulatedMs >= GAME_CONFIG.tickRate) {
+    tick(state, GAME_CONFIG.tickRate);
+    accumulatedMs -= GAME_CONFIG.tickRate;
   }
 
   rafHandle = requestAnimationFrame(loop);
@@ -145,19 +117,16 @@ export function startGameLoop(): void {
   if (rafHandle) return;
   processOffline();
   rafHandle = requestAnimationFrame(loop);
-  pushLog("▶ Gray Protocol engine started.");
+  pushLog("Engine started");
 }
 
 export function stopGameLoop(): void {
-  if (rafHandle) {
-    cancelAnimationFrame(rafHandle);
-    rafHandle = 0;
-    lastTimestamp = 0;
-    accumulated = 0;
-  }
+  if (!rafHandle) return;
+  cancelAnimationFrame(rafHandle);
+  rafHandle = 0;
+  lastTimestamp = 0;
+  accumulatedMs = 0;
 }
-
-// ─── Free/assign compute legacy shim ─────────────────────────────────────────
 
 export function freeCompute(): Decimal {
   return getAvailableCompute(state);
@@ -170,8 +139,38 @@ export function assignCompute(nodeId: string, amount: DecimalSource): boolean {
 export function unassignCompute(nodeId: string, amount?: DecimalSource): boolean {
   const current = getComputeAllocationForActivity(state, nodeId);
   if (current.lte(0)) return false;
-  const toRemove = amount !== undefined ? new Decimal(amount) : current;
-  const clamped = Decimal.min(toRemove, current);
-  state.allocations.computePowerByActivityId[nodeId] = current.sub(clamped);
+
+  const toRemove = amount === undefined ? current : new Decimal(amount);
+  const clampedRemove = Decimal.min(current, Decimal.max(new Decimal(0), toRemove));
+  gsUnassign(state, nodeId, clampedRemove);
   return true;
+}
+
+function gsUnassign(gs: GameState, nodeId: string, amount: Decimal): void {
+  const current = getComputeAllocationForActivity(gs, nodeId);
+  gs.allocations.computeByActivityId[nodeId] = Decimal.max(new Decimal(0), current.sub(amount));
+}
+
+export function tickPreview(gs: GameState, deltaMs: number): GameState {
+  const cloned: GameState = {
+    ...gs,
+    resources: createEmptyResourceMap(),
+    activities: structuredClone(gs.activities),
+    research: { completed: new Set(gs.research.completed) },
+    prestige: structuredClone(gs.prestige),
+    allocations: {
+      computeByActivityId: Object.fromEntries(
+        Object.entries(gs.allocations.computeByActivityId).map(([id, value]) => [id, new Decimal(value)])
+      ),
+    },
+    timestamps: { ...gs.timestamps },
+    log: [...gs.log],
+  };
+  cloned.resources.money = new Decimal(gs.resources.money);
+  cloned.resources.crypto = new Decimal(gs.resources.crypto);
+  cloned.resources.compute = new Decimal(gs.resources.compute);
+  cloned.resources.reputation = new Decimal(gs.resources.reputation);
+
+  tick(cloned, deltaMs);
+  return cloned;
 }

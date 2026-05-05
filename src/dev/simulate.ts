@@ -1,9 +1,18 @@
-// src/dev/simulate.ts
 import Decimal from "break_eternity.js";
 import { createInitialGameState } from "../core/state";
-import { tick, setComputeAllocation } from "../core/engine";
+import {
+  calculateOfflineProgress,
+  getAvailableCompute,
+  getComputeAllocationForActivity,
+  setComputeAllocation,
+  tick,
+} from "../core/engine";
+import { ACTIVITY_DEFINITIONS, purchaseActivityLevel } from "../core/activities";
 import { getReputationAlignment } from "../core/reputation";
-import { validateGameState } from "../core/validation";
+import { canResearchNode, purchaseResearchNode } from "../core/research";
+import { canPrestige, previewPrestigeGain } from "../core/prestige";
+import { previewSerializedState } from "../core/persistence";
+import { validateGameState, validateSerializedGameState } from "../core/validation";
 
 function log(label: string, value: unknown): void {
   console.log(`[sim] ${label}:`, value);
@@ -13,80 +22,75 @@ export function runSimulation(): void {
   console.log("=== Gray Protocol Simulation ===");
 
   const gs = createInitialGameState();
+  log("Fresh canonical resources", {
+    money: gs.resources.money.toString(),
+    crypto: gs.resources.crypto.toString(),
+    compute: gs.resources.compute.toString(),
+    reputation: gs.resources.reputation.toString(),
+  });
 
-  // Activate activities
-  gs.activities["basicCryptoMining"].unlocked = true;
-  gs.activities["basicCryptoMining"].active = true;
-  gs.activities["basicCryptoMining"].level = 1;
+  for (const activityId of Object.keys(ACTIVITY_DEFINITIONS)) {
+    gs.activities[activityId].unlocked = true;
+    gs.activities[activityId].active = true;
+    purchaseActivityLevel(gs, activityId);
+  }
 
-  gs.activities["bugBountyHunting"].unlocked = true;
-  gs.activities["bugBountyHunting"].active = true;
-  gs.activities["bugBountyHunting"].level = 1;
-
-  gs.activities["passwordCracking"].unlocked = true;
-  gs.activities["passwordCracking"].active = true;
-  gs.activities["passwordCracking"].level = 1;
-
-  // Allocate compute
   setComputeAllocation(gs, "basicCryptoMining", new Decimal(5));
   setComputeAllocation(gs, "passwordCracking", new Decimal(3));
 
-  log("Initial resources", {
+  log("Compute allocation", {
+    available: getAvailableCompute(gs).toString(),
+    mining: getComputeAllocationForActivity(gs, "basicCryptoMining").toString(),
+    cracking: getComputeAllocationForActivity(gs, "passwordCracking").toString(),
+  });
+
+  tick(gs, 10_000);
+  log("After 10s activity tick", {
     money: gs.resources.money.toString(),
-    crypto: gs.resources.cryptoCurrency.toString(),
-    compute: gs.resources.computePower.toString(),
-    reputation: gs.resources.reputationStanding.toString(),
-    alignment: getReputationAlignment(gs.resources.reputationStanding),
+    crypto: gs.resources.crypto.toString(),
+    compute: gs.resources.compute.toString(),
+    reputation: gs.resources.reputation.toString(),
+    alignment: getReputationAlignment(gs.resources.reputation),
   });
 
-  // Simulate 10 seconds (100 ticks of 100ms)
-  for (let i = 0; i < 100; i++) {
-    tick(gs, 100);
-  }
+  gs.resources.money = gs.resources.money.add(new Decimal(1_000));
+  gs.resources.compute = gs.resources.compute.add(new Decimal(1_000));
+  gs.resources.crypto = gs.resources.crypto.add(new Decimal(1_000));
 
-  log("After 10s simulation", {
+  log("Research affordability", {
+    parallelProcessing: canResearchNode(gs, "parallelProcessing"),
+    responsibleDisclosure: canResearchNode(gs, "responsibleDisclosure"),
+    exploitAutomation: canResearchNode(gs, "exploitAutomation"),
+  });
+
+  purchaseResearchNode(gs, "parallelProcessing");
+
+  calculateOfflineProgress(gs, 3_600_000);
+  log("After offline progress", {
     money: gs.resources.money.toString(),
-    crypto: gs.resources.cryptoCurrency.toString(),
-    compute: gs.resources.computePower.toString(),
-    reputation: gs.resources.reputationStanding.toString(),
-    alignment: getReputationAlignment(gs.resources.reputationStanding),
+    crypto: gs.resources.crypto.toString(),
+    reputation: gs.resources.reputation.toString(),
   });
 
-  // Simulate offline progress case (1 hour)
-  const gs2 = createInitialGameState();
-  gs2.activities["basicCryptoMining"].unlocked = true;
-  gs2.activities["basicCryptoMining"].active = true;
-  gs2.activities["basicCryptoMining"].level = 1;
-  setComputeAllocation(gs2, "basicCryptoMining", new Decimal(5));
-
-  const oneHourMs = 3_600_000;
-  const ticks = Math.floor(oneHourMs / 100);
-  for (let i = 0; i < ticks; i++) {
-    tick(gs2, 100);
-  }
-  log("After 1h offline (basicCryptoMining)", {
-    crypto: gs2.resources.cryptoCurrency.toString(),
+  log("Prestige preview", {
+    canPrestige: canPrestige(gs, "protocolReset"),
+    gain: previewPrestigeGain(gs, "protocolReset").toString(),
   });
 
-  // Validate no NaN
+  const serialized = previewSerializedState(gs);
+  log("Serialized scientific resources", serialized.resources);
+
   const validation = validateGameState(gs);
-  if (validation.valid) {
-    console.log("[sim] ✅ No validation errors after simulation");
-  } else {
-    console.error("[sim] ❌ Validation errors:", validation.errors);
-  }
+  const serializedValidation = validateSerializedGameState(serialized);
 
-  // Reputation additive check
-  const gs3 = createInitialGameState();
-  gs3.resources.reputationStanding = new Decimal(500);
-  gs3.activities["passwordCracking"].active = true;
-  gs3.activities["passwordCracking"].unlocked = true;
-  gs3.activities["passwordCracking"].level = 1;
-  tick(gs3, 10000); // 10s
-  log("Reputation delta test (started +500, ran passwordCracking 10s)", {
-    reputation: gs3.resources.reputationStanding.toString(),
-    alignment: getReputationAlignment(gs3.resources.reputationStanding),
-  });
+  if (validation.valid && serializedValidation.valid) {
+    console.log("[sim] ✅ State and serialized payload validation passed");
+  } else {
+    console.error("[sim] ❌ Validation errors", {
+      gameState: validation.errors,
+      serialized: serializedValidation.errors,
+    });
+  }
 
   console.log("=== Simulation Complete ===");
 }

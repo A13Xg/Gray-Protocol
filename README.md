@@ -1,35 +1,61 @@
 # Gray Protocol
 
-> v1.0.0-alpha — A headless, high-performance idle game engine
+Gray Protocol is a headless-first incremental idle game built with Vue 3, TypeScript, and Vite for static hosting (including GitHub Pages).
 
-A modular idle game engine built with **Vue 3**, **TypeScript**, and **Vite**. Features:
+## Tech Stack
 
-- **Big-number scaling** via [break_eternity.js](https://github.com/Patashu/break_eternity.js)
-- **Multi-resource system** — Money, Crypto, Parity, and Compute
-- **Dual-path reputation architecture** — Bug Bounty vs Illegal Script
-- **10 FPS game loop** with offline catch-up (capped at 24 h)
-- **Persistent saves** — localStorage + Base64 export/import with NaN validation
-- Optimised for static deployment on GitHub Pages
+- Vue 3
+- TypeScript
+- Vite
+- break_eternity.js for all game-scale runtime math
 
-## Project Structure
+## Canonical Resource Keys
 
-```
-src/
-  core/
-    config.ts       – TICK_RATE, OFFLINE_CAP, INITIAL_RESOURCES
-    state.ts        – shallowReactive game state tree
-    engine.ts       – resource engine, game loop, offline catch-up
-    persistence.ts  – save/load & Base64 export/import
-  utils/
-    formatter.ts    – big-number formatter (1k–1B → letter notation ≥ 1e15)
-  App.vue           – UI: System Log, Resources, Actions, Data Bridge
-```
+Core engine resource identities are fixed and UI-agnostic:
 
-## Development
+- `money`
+- `crypto`
+- `compute`
+- `reputation`
 
-```bash
-npm install
-npm run dev       # dev server
-npm run build     # production build (zero TS errors)
-npm run preview   # preview production build
-```
+Legacy keys are not used by core runtime logic.
+
+## Development Commands
+
+- `npm install`
+- `npm run dev`
+- `npm run build`
+- `npm run preview`
+
+## Static Deployment
+
+The app builds to static assets with Vite (`dist/`) and is suitable for GitHub Pages style deployment.
+
+## Save System Summary
+
+- Save envelope: `{ version, createdAt, updatedAt, payload }`
+- `payload` is codec-encoded JSON (default codec uses Base64 obfuscation)
+- Numeric values in decoded payload are scientific-notation strings (or `"0"`)
+- Runtime values are always `Decimal`
+- Legacy resource keys (`cryptoCurrency`, `computePower`, `reputationStanding`) are migrated on load when possible
+
+Base64 is obfuscation only, not security.
+
+## Current Implemented Systems
+
+- Deterministic headless `tick(state, deltaMs)` engine path
+- Batched offline progress via `calculateOfflineProgress(state, elapsedMs)`
+- Canonical resource map utilities
+- Compute allocation by absolute amounts (`allocations.computeByActivityId`)
+- Config-driven starter activities:
+  - `basicCryptoMining`
+  - `bugBountyHunting`
+  - `passwordCracking`
+- Config-driven starter research:
+  - `parallelProcessing`
+  - `responsibleDisclosure`
+  - `exploitAutomation`
+- Single prestige foundation layer:
+  - `protocolReset`
+- Save validation and serialized payload validation
+- Dev simulation harness in `src/dev/simulate.ts`
