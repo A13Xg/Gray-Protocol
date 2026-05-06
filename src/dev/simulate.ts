@@ -21,6 +21,7 @@ import {
 } from "../core/upgrades";
 import { applyPrestige, canPrestige, getPrestigeRequirement } from "../core/prestige";
 import { getGeneratorMultiplierStack } from "../core/scaling";
+import { assertContentDefinitions } from "../core/content/validation";
 
 function log(label: string, value: unknown): void {
   console.log(`[sim] ${label}:`, value);
@@ -38,6 +39,7 @@ function snap(gs: ReturnType<typeof createInitialGameState>): Record<string, str
 }
 
 export function runSimulation(): void {
+  assertContentDefinitions();
   console.log("=== Gray Protocol Simulation — Core Scaling Foundation ===");
 
   const gs = createInitialGameState();

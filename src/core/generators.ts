@@ -8,92 +8,9 @@ import type {
 } from "./types";
 import { getGeneratorMultiplierStack } from "./scaling";
 import { recordResourceGain } from "./progression";
+import { GENERATOR_CONFIGS } from "./content/generators";
 
-// ── Config Registry ───────────────────────────────────────────────────────────
-
-export const GENERATOR_CONFIGS: Record<string, ResourceGeneratorConfig> = {
-  // ── Manual ────────────────────────────────────────────────────────────────
-  hackDevice: {
-    id: "hackDevice",
-    name: "Hack Device",
-    description: "Exploit a target device for quick money. Damages reputation.",
-    type: "manual",
-    path: "blackhat",
-    outputResources: { money: new Decimal(1) },
-    reputationEffect: new Decimal(-1),
-    level: 1,
-    maxLevel: 10,
-    levelScaling: 1.5,
-  },
-  hardenDevice: {
-    id: "hardenDevice",
-    name: "Harden Device",
-    description: "Secure a device for a client. Earns money and builds reputation.",
-    type: "manual",
-    path: "whitehat",
-    outputResources: { money: new Decimal(1) },
-    reputationEffect: new Decimal(1),
-    level: 1,
-    maxLevel: 10,
-    levelScaling: 1.5,
-  },
-
-  // ── Passive ───────────────────────────────────────────────────────────────
-  payloadScript: {
-    id: "payloadScript",
-    name: "Payload Script",
-    description: "A background script that passively erodes reputation each second.",
-    type: "passive",
-    path: "blackhat",
-    tickIntervalMs: 1000,
-    outputResources: { reputation: new Decimal(-0.1) },
-    level: 1,
-    maxLevel: 10,
-    levelScaling: 1.2,
-    computeScaling: {
-      enabled: true,
-      baselineCompute: new Decimal(10),
-      exponent: new Decimal(0.25),
-    },
-  },
-  antiVirus: {
-    id: "antiVirus",
-    name: "Anti-Virus Software",
-    description: "A background process that passively builds reputation each second.",
-    type: "passive",
-    path: "whitehat",
-    tickIntervalMs: 1000,
-    outputResources: { reputation: new Decimal(0.1) },
-    level: 1,
-    maxLevel: 10,
-    levelScaling: 1.2,
-    computeScaling: {
-      enabled: true,
-      baselineCompute: new Decimal(10),
-      exponent: new Decimal(0.25),
-    },
-  },
-
-  // ── Timed ─────────────────────────────────────────────────────────────────
-  buildDevice: {
-    id: "buildDevice",
-    name: "Build Device",
-    description: "Invest money and crypto to construct a device that yields double the investment.",
-    type: "timed",
-    path: "shared",
-    durationMs: 60_000,
-    inputResources: { money: new Decimal(10), crypto: new Decimal(5) },
-    outputResources: { money: new Decimal(20) },
-    level: 1,
-    maxLevel: 5,
-    levelScaling: 2.0,
-    computeScaling: {
-      enabled: true,
-      baselineCompute: new Decimal(10),
-      exponent: new Decimal(0.2),
-    },
-  },
-};
+export { GENERATOR_CONFIGS } from "./content/generators";
 
 function canAffordInputs(gs: GameState, config: ResourceGeneratorConfig): boolean {
   if (!config.inputResources) return true;

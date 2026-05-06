@@ -29,6 +29,9 @@ const fmtMoney      = computed(() => format(state.resources.money));
 const fmtCrypto     = computed(() => format(state.resources.crypto));
 const fmtCompute    = computed(() => format(state.resources.compute));
 const fmtReputation = computed(() => format(state.resources.reputation));
+const assetBase = import.meta.env.BASE_URL;
+const hatLogoSrc = `${assetBase}branding/GrayProtocol-Hat.png`;
+const wordmarkSrc = `${assetBase}branding/GrayProtocol-Logo.png`;
 
 const alignment = computed(() => getReputationAlignment(state.resources.reputation));
 
@@ -153,7 +156,19 @@ function onStartTimed(id: string): void {
 </script>
 <template>
   <div class="root">
-    <h1>Gray Protocol <span class="version">v{{ state.version }}</span></h1>
+    <header class="masthead card">
+      <div class="brand-lockup">
+        <img class="brand-hat" :src="hatLogoSrc" alt="Gray Protocol hat logo" />
+        <div>
+          <div class="brand-title-row">
+            <h1>Gray Protocol</h1>
+            <span class="version">v{{ state.version }}</span>
+          </div>
+          <p class="brand-subtitle">Operator console for gray-hat protocol escalation.</p>
+        </div>
+      </div>
+      <img class="brand-wordmark" :src="wordmarkSrc" alt="Gray Protocol logo" />
+    </header>
 
     <section class="card">
       <h2>Resources</h2>
@@ -328,8 +343,50 @@ function onStartTimed(id: string): void {
   padding: 14px;
   color: #d8f5d8;
 }
-h1 { margin: 0 0 14px; font-size: 22px; }
+h1 { margin: 0; font-size: 22px; }
 .version { font-size: 12px; opacity: 0.6; }
+
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.brand-hat {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(136, 255, 136, 0.18));
+}
+
+.brand-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.brand-subtitle {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.7;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brand-wordmark {
+  width: min(220px, 38vw);
+  height: auto;
+  object-fit: contain;
+}
 
 .card {
   border: 1px solid #335033;
@@ -461,4 +518,15 @@ textarea {
   color: #d8f5d8;
 }
 .debug-grid { margin: 8px 0; }
+
+@media (max-width: 640px) {
+  .masthead {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .brand-wordmark {
+    width: min(260px, 100%);
+  }
+}
 </style>

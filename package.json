@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "sanity:economy": "tsx src/dev/sanity.ts",
+    "healthcheck": "npm run test && npm run sanity:economy && npx tsx src/dev/simulate.ts && npm run build"
   },
   "dependencies": {
     "break_eternity.js": "^2.1.3",
@@ -16,8 +20,10 @@
     "@types/node": "^24.12.2",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/tsconfig": "^0.9.1",
+    "tsx": "^4.20.4",
     "typescript": "~6.0.2",
     "vite": "^8.0.10",
+    "vitest": "^3.2.4",
     "vue-tsc": "^3.2.7"
   }
 }

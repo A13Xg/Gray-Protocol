@@ -4,7 +4,7 @@ export const VERSION = "3.0.0-core-scaling";
 
 export const GAME_CONFIG = {
   serialization: {
-    saveVersion: "2.0.0",
+    saveVersion: "3.0.0",
   },
 
   tickRate: 100,

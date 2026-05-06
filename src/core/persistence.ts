@@ -6,6 +6,7 @@ import { deserializeResourceMap, serializeResourceMap, deserializeDecimal, seria
 import { repairResourceMap } from "./resources";
 import { createInitialCumulativeResources } from "./prestige";
 import { nowMs } from "./clock";
+import { migrateSaveEnvelope, migrateSerializedPayload } from "./migrations";
 
 const SAVE_KEY = "gray_protocol_save_v1";
 
@@ -88,9 +89,9 @@ export function loadGame(): void {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return;
-    const file = JSON.parse(raw) as SaveFile;
+    const file = migrateSaveEnvelope(JSON.parse(raw) as SaveFile);
     if (!file?.payload) return;
-    const serialized = JSON.parse(atob(file.payload)) as SerializedGameState;
+    const serialized = migrateSerializedPayload(JSON.parse(atob(file.payload)));
     deserializeState(serialized, state);
     pushLog("Game loaded");
   } catch (e) {
@@ -112,9 +113,9 @@ export function exportSave(): string {
 
 export function importSave(encoded: string): boolean {
   try {
-    const file = JSON.parse(atob(encoded)) as SaveFile;
+    const file = migrateSaveEnvelope(JSON.parse(atob(encoded)) as SaveFile);
     if (!file?.payload) return false;
-    const serialized = JSON.parse(atob(file.payload)) as SerializedGameState;
+    const serialized = migrateSerializedPayload(JSON.parse(atob(file.payload)));
     deserializeState(serialized, state);
     pushLog("Save imported");
     return true;
