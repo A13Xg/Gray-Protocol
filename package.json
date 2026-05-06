@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "sanity:economy": "tsx src/dev/sanity.ts",
+    "verify:full": "tsx src/dev/verify.ts",
     "healthcheck": "npm run test && npm run sanity:economy && npx tsx src/dev/simulate.ts && npm run build"
   },
   "dependencies": {

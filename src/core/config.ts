@@ -74,12 +74,12 @@ export const GAME_CONFIG = {
   },
 
   actions: {
-    pentestSystem: {
+    hardenComputer: {
       baseReward: new Decimal(1),
       reputationDelta: new Decimal(1),
       path: "whitehat" as const,
     },
-    exploitSystem: {
+    hackComputer: {
       baseReward: new Decimal(1),
       reputationDelta: new Decimal(-1),
       path: "blackhat" as const,

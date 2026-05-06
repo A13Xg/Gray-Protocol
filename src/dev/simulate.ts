@@ -10,6 +10,8 @@ import {
   startTimedGenerator,
   tickTimedGenerators,
   GENERATORS,
+  allocateTimedCompute,
+  setTimedActivityAutoRun,
 } from "../core/generators";
 import { getCryptoPrice, convertMoneyToCrypto } from "../core/crypto";
 import {
@@ -142,6 +144,34 @@ export function runSimulation(): void {
     stackTotal: timedDone[0]?.multiplierStack?.total.toString(),
   });
 
+  // 6b) Concurrent timed activities with proportional compute allocation
+  gs.resources = { ...gs.resources, money: new Decimal(200), crypto: new Decimal(40), compute: new Decimal(30) };
+  const timedStartA = startTimedGenerator(gs, "buildDevice");
+  const timedStartB = startTimedGenerator(gs, "marketSkim");
+  const timedAlloc = allocateTimedCompute(gs);
+  log("Timed compute allocation", {
+    startedBuildDevice: timedStartA,
+    startedMarketSkim: timedStartB,
+    buildDevice: timedAlloc.buildDevice?.toString(),
+    marketSkim: timedAlloc.marketSkim?.toString(),
+  });
+
+  // 6c) Auto-run disables when resources dry up
+  const gsTimedAuto = createInitialGameState();
+  gsTimedAuto.resources = {
+    ...gsTimedAuto.resources,
+    money: new Decimal(10),
+    crypto: new Decimal(5),
+    compute: new Decimal(10),
+  };
+  const autoEnabled = setTimedActivityAutoRun(gsTimedAuto, "buildDevice", true);
+  const autoCompletions = tickTimedGenerators(gsTimedAuto, 60_000);
+  log("Timed auto-run check", {
+    enabled: autoEnabled,
+    completions: autoCompletions.length,
+    autoRunStillEnabled: gsTimedAuto.generators.timedAutoRunById.buildDevice ?? false,
+  });
+
   // 7) Crypto fluctuation bounds and deterministic behavior
   const samples = [0, 5000, 10000, 15000, 20000, 30000, 45000, 60000].map((ms) => {
     const p = getCryptoPrice(ms);
@@ -180,12 +210,26 @@ export function runSimulation(): void {
   // 9) Additional deterministic split check for passive generator
   const gsA = createInitialGameState();
   const gsB = createInitialGameState();
+  gsA.resources = { ...gsA.resources, compute: new Decimal(10), reputation: new Decimal(500) };
+  gsB.resources = { ...gsB.resources, compute: new Decimal(10), reputation: new Decimal(500) };
   GENERATORS.antiVirus.executePassive(gsA, 1000);
   for (let i = 0; i < 10; i++) GENERATORS.antiVirus.executePassive(gsB, 100);
   log("Passive deterministic split check", {
-    oneShot: gsA.resources.reputation.toString(),
-    split: gsB.resources.reputation.toString(),
-    equal: gsA.resources.reputation.eq(gsB.resources.reputation),
+    oneShot: gsA.resources.crypto.toString(),
+    split: gsB.resources.crypto.toString(),
+    equal: gsA.resources.crypto.eq(gsB.resources.crypto),
+  });
+
+  // 10) Concurrent passive compute allocation check
+  const gsC = createInitialGameState();
+  gsC.resources = { ...gsC.resources, compute: new Decimal(10), reputation: new Decimal(999) };
+  const beforeRep = gsC.resources.reputation;
+  const beforeCrypto = gsC.resources.crypto;
+  GENERATORS.antiVirus.executePassive(gsC, 1000, new Decimal(5));
+  GENERATORS.payloadScript.executePassive(gsC, 1000, new Decimal(5));
+  log("Concurrent passive allocation check", {
+    cryptoDelta: gsC.resources.crypto.sub(beforeCrypto).toString(),
+    reputationUnchanged: gsC.resources.reputation.eq(beforeRep),
   });
 
   console.log("=== Simulation Complete ===");

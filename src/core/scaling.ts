@@ -21,11 +21,26 @@ export function getPrestigeMultiplier(gs: GameState): Decimal {
   return gs.prestige.multiplier;
 }
 
-export function getComputeMultiplier(gs: GameState, config: ResourceGeneratorConfig): Decimal {
+export function getComputeMultiplier(
+  gs: GameState,
+  config: ResourceGeneratorConfig,
+  assignedCompute?: Decimal
+): Decimal {
   if (!config.computeScaling?.enabled) return new Decimal(1);
+
+  // Passive generators use assigned/total compute ratio by design.
+  if (config.type === "passive") {
+    const totalCompute = gs.resources.compute.max(0);
+    if (totalCompute.lte(0)) return new Decimal(0);
+    const assigned = (assignedCompute ?? totalCompute).max(0);
+    const ratio = assigned.div(totalCompute).max(0);
+    return Decimal.pow(ratio, config.computeScaling.exponent);
+  }
+
   const baseline = config.computeScaling.baselineCompute;
   if (baseline.lte(0)) return new Decimal(1);
-  const ratio = gs.resources.compute.div(baseline).max(0);
+  const computePool = assignedCompute ?? gs.resources.compute;
+  const ratio = computePool.div(baseline).max(0);
   return Decimal.pow(ratio, config.computeScaling.exponent);
 }
 
@@ -50,14 +65,24 @@ export function getTalentUpgradeMultiplier(
   return getGeneratorTalentMultiplier(gs, config, resource);
 }
 
-export function getReputationComputeMultiplier(gs: GameState, config: ResourceGeneratorConfig): Decimal {
-  return getReputationPathMultiplier(gs, config.path).mul(getComputeMultiplier(gs, config));
+export function getReputationComputeMultiplier(
+  gs: GameState,
+  config: ResourceGeneratorConfig,
+  assignedCompute?: Decimal
+): Decimal {
+  const compute = getComputeMultiplier(gs, config, assignedCompute);
+  if (config.type === "passive") {
+    // Future hook: passive reputation/path multipliers can be composed here later.
+    return compute;
+  }
+  return getReputationPathMultiplier(gs, config.path).mul(compute);
 }
 
 export function getGeneratorMultiplierStack(
   gs: GameState,
   config: ResourceGeneratorConfig,
-  resource: ResourceKey
+  resource: ResourceKey,
+  assignedCompute?: Decimal
 ): {
   base: Decimal;
   level: Decimal;
@@ -70,8 +95,37 @@ export function getGeneratorMultiplierStack(
   const level = getLevelMultiplier(gs, config);
   const talentUpgrade = getTalentUpgradeMultiplier(gs, config, resource);
   const prestige = getPrestigeMultiplier(gs);
-  const reputationCompute = getReputationComputeMultiplier(gs, config);
+  const reputationCompute = getReputationComputeMultiplier(gs, config, assignedCompute);
   const total = base.mul(level).mul(talentUpgrade).mul(prestige).mul(reputationCompute);
 
   return { base, level, talentUpgrade, prestige, reputationCompute, total };
+}
+
+export function getManualClickMultiplierStack(
+  gs: GameState,
+  config: ResourceGeneratorConfig
+): {
+  base: Decimal;
+  level: Decimal;
+  talentUpgrade: Decimal;
+  prestige: Decimal;
+  reputationCompute: Decimal;
+  total: Decimal;
+} {
+  const base = getBaseRewardMultiplier(config);
+  const level = getLevelMultiplier(gs, config);
+  // Manual click actions intentionally scale with level only for now.
+  // These identity factors are reserved integration hooks for future
+  // talent, prestige, reputation-path, and compute multipliers.
+  const identity = new Decimal(1);
+  const total = base.mul(level);
+
+  return {
+    base,
+    level,
+    talentUpgrade: identity,
+    prestige: identity,
+    reputationCompute: identity,
+    total,
+  };
 }

@@ -148,5 +148,21 @@ export function validateSerializedGameState(serialized: unknown): ValidationResu
     }
   }
 
+  if (s.generators && typeof s.generators === "object") {
+    const generators = s.generators as Record<string, unknown>;
+    const levels = generators.levels as Record<string, unknown> | undefined;
+    if (levels && typeof levels === "object") {
+      const SCIENTIFIC_OR_ZERO = /^-?(?:0|\d+(?:\.\d+)?e[+-]?\d+)$/i;
+      for (const [id, value] of Object.entries(levels)) {
+        if (typeof value !== "string") {
+          return fail(`generators.levels.${id} must be a string`);
+        }
+        if (value !== "0" && !SCIENTIFIC_OR_ZERO.test(value.trim())) {
+          return fail(`generators.levels.${id} is not in scientific notation`);
+        }
+      }
+    }
+  }
+
   return success();
 }

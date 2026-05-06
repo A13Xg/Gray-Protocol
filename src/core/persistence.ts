@@ -10,6 +10,22 @@ import { migrateSaveEnvelope, migrateSerializedPayload } from "./migrations";
 
 const SAVE_KEY = "gray_protocol_save_v1";
 
+function serializeGeneratorLevels(levels: GameState["generators"]["levels"]): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(levels).map(([id, level]) => [id, serializeDecimal(deserializeDecimal(String(level)))])
+  );
+}
+
+function deserializeGeneratorLevels(levels: Record<string, string | number> | undefined): Record<string, number> {
+  if (!levels) return {};
+  return Object.fromEntries(
+    Object.entries(levels).map(([id, level]) => {
+      const parsed = typeof level === "number" ? level : deserializeDecimal(level).toNumber();
+      return [id, Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : 1];
+    })
+  );
+}
+
 function serializeState(gs: GameState): SerializedGameState {
   const saveTime = nowMs();
   return {
@@ -17,9 +33,10 @@ function serializeState(gs: GameState): SerializedGameState {
     resources: serializeResourceMap(gs.resources),
     timestamps: { ...gs.timestamps, lastSavedAt: saveTime },
     generators: {
-      levels: { ...gs.generators.levels },
+      levels: serializeGeneratorLevels(gs.generators.levels),
       timedProgress: { ...gs.generators.timedProgress },
       passiveRemainderMs: { ...gs.generators.passiveRemainderMs },
+      timedAutoRunById: { ...gs.generators.timedAutoRunById },
     },
     talents: {
       runUnlockedById: { ...gs.talents.runUnlockedById },
@@ -44,12 +61,13 @@ function deserializeState(serialized: SerializedGameState, target: GameState): v
   };
   if (serialized.generators) {
     target.generators = {
-      levels: serialized.generators.levels ?? {},
+      levels: deserializeGeneratorLevels(serialized.generators.levels),
       timedProgress: serialized.generators.timedProgress ?? {},
       passiveRemainderMs: serialized.generators.passiveRemainderMs ?? {},
+      timedAutoRunById: serialized.generators.timedAutoRunById ?? {},
     };
   } else {
-    target.generators = { levels: {}, timedProgress: {}, passiveRemainderMs: {} };
+    target.generators = { levels: {}, timedProgress: {}, passiveRemainderMs: {}, timedAutoRunById: {} };
   }
 
   target.talents = {

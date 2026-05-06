@@ -14,14 +14,35 @@ export interface ActionDefinition {
   name: string;
   description: string;
   path: ActionPath;
+  generatorId: string;
   baseReward: Decimal;
   reputationDelta: Decimal;
 }
 
 export interface ActionOutcome {
   actionId: string;
+  generatorId: string;
+  level: number;
   rewardApplied: Decimal;
   reputationDelta: Decimal;
+}
+
+export interface ManualClickAction {
+  definition: ActionDefinition;
+  currentLevel(gs: GameState): number;
+  getYield(gs: GameState): Decimal;
+  execute(gs: GameState): ActionOutcome | null;
+  levelUp(gs: GameState): boolean;
+}
+
+export interface TimedActivityNode {
+  id: string;
+  start(gs: GameState): boolean;
+  setAutoRun(gs: GameState, enabled: boolean): boolean;
+  currentLevel(gs: GameState): number;
+  getInputCosts(gs: GameState): Partial<Record<ResourceKey, Decimal>>;
+  isAutoRunEnabled(gs: GameState): boolean;
+  isRunning(gs: GameState): boolean;
 }
 
 export interface CryptoConversionResult {
@@ -86,6 +107,7 @@ export interface GeneratorState {
   levels: Record<string, number>;
   timedProgress: Record<string, TimedGeneratorProgress>;
   passiveRemainderMs: Record<string, number>;
+  timedAutoRunById: Record<string, boolean>;
 }
 
 export interface GeneratorModifierEffect {
@@ -154,9 +176,10 @@ export interface SerializedGameState {
     lastTickAt: number;
   };
   generators?: {
-    levels: Record<string, number>;
+    levels: Record<string, string>;
     timedProgress: Record<string, TimedGeneratorProgress>;
     passiveRemainderMs: Record<string, number>;
+    timedAutoRunById?: Record<string, boolean>;
   };
   talents?: {
     runUnlockedById: Record<string, boolean>;
