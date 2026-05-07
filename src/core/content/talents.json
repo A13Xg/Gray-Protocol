@@ -1,0 +1,59 @@
+{
+  "talents": [
+    {
+      "id": "manualProtocols",
+      "name": "Manual Protocols",
+      "description": "Improve manual execution throughput.",
+      "scope": "run",
+      "costs": {
+        "money": "25"
+      },
+      "effects": {
+        "generatorMultipliers": [
+          {
+            "mode": "multiplicative",
+            "value": "0.2",
+            "generatorTypes": ["manual"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "persistentAutomation",
+      "name": "Persistent Automation",
+      "description": "Permanent passive process tuning.",
+      "scope": "permanent",
+      "costs": {
+        "crypto": "3"
+      },
+      "prerequisites": {
+        "minReputation": "5"
+      },
+      "effects": {
+        "generatorMultipliers": [
+          {
+            "mode": "multiplicative",
+            "value": "0.15",
+            "generatorTypes": ["passive"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "marketMakers",
+      "name": "Market Makers",
+      "description": "Improves money->crypto conversion efficiency.",
+      "scope": "run",
+      "costs": {
+        "money": "40",
+        "reputation": "3"
+      },
+      "effects": {
+        "cryptoEfficiency": {
+          "mode": "multiplicative",
+          "value": "0.1"
+        }
+      }
+    }
+  ]
+}

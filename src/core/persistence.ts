@@ -37,6 +37,7 @@ function serializeState(gs: GameState): SerializedGameState {
       timedProgress: { ...gs.generators.timedProgress },
       passiveRemainderMs: { ...gs.generators.passiveRemainderMs },
       timedAutoRunById: { ...gs.generators.timedAutoRunById },
+      passiveEnabledById: { ...gs.generators.passiveEnabledById },
     },
     talents: {
       runUnlockedById: { ...gs.talents.runUnlockedById },
@@ -65,9 +66,16 @@ function deserializeState(serialized: SerializedGameState, target: GameState): v
       timedProgress: serialized.generators.timedProgress ?? {},
       passiveRemainderMs: serialized.generators.passiveRemainderMs ?? {},
       timedAutoRunById: serialized.generators.timedAutoRunById ?? {},
+      passiveEnabledById: serialized.generators.passiveEnabledById ?? {},
     };
   } else {
-    target.generators = { levels: {}, timedProgress: {}, passiveRemainderMs: {}, timedAutoRunById: {} };
+    target.generators = {
+      levels: {},
+      timedProgress: {},
+      passiveRemainderMs: {},
+      timedAutoRunById: {},
+      passiveEnabledById: {},
+    };
   }
 
   target.talents = {

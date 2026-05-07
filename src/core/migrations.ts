@@ -15,6 +15,7 @@ function migrateV1ToV2(payload: Record<string, unknown>): Record<string, unknown
       timedProgress: {},
       passiveRemainderMs: {},
       timedAutoRunById: {},
+      passiveEnabledById: {},
     },
   };
 }
@@ -30,12 +31,16 @@ function migrateV2ToV3(payload: Record<string, unknown>): Record<string, unknown
           timedAutoRunById: isObject(payload.generators.timedAutoRunById)
             ? payload.generators.timedAutoRunById
             : {},
+          passiveEnabledById: isObject(payload.generators.passiveEnabledById)
+            ? payload.generators.passiveEnabledById
+            : {},
         }
       : {
           levels: {},
           timedProgress: {},
           passiveRemainderMs: {},
           timedAutoRunById: {},
+          passiveEnabledById: {},
         },
     talents: payload.talents ?? {
       runUnlockedById: {},

@@ -1,0 +1,191 @@
+{
+  "nodes": [
+    {
+      "id": "hardenDevice",
+      "name": "Harden Computer",
+      "description": "Secure a computer for a client. Earn money and build reputation.",
+      "kind": "clickable",
+      "path": "whitehat",
+      "enabled": true,
+      "aliases": ["hardenComputer", "pentestSystem"],
+      "inputResources": {},
+      "outputResources": {
+        "money": "1"
+      },
+      "defaultMultiplierPct": "0",
+      "reputationEffect": "1",
+      "unlock": {},
+      "upgrade": {
+        "startingLevel": 1,
+        "maxLevel": 10,
+        "levelMultiplierPct": "100"
+      },
+      "computeScaling": {
+        "enabled": false,
+        "baselineCompute": "1",
+        "exponent": "0"
+      },
+      "runtime": {},
+      "tags": ["manual", "action"]
+    },
+    {
+      "id": "hackDevice",
+      "name": "Hack Computer",
+      "description": "Hack a computer for quick money. Damages reputation.",
+      "kind": "clickable",
+      "path": "blackhat",
+      "enabled": true,
+      "aliases": ["hackComputer", "exploitSystem"],
+      "inputResources": {},
+      "outputResources": {
+        "money": "1"
+      },
+      "defaultMultiplierPct": "0",
+      "reputationEffect": "-1",
+      "unlock": {},
+      "upgrade": {
+        "startingLevel": 1,
+        "maxLevel": 10,
+        "levelMultiplierPct": "100"
+      },
+      "computeScaling": {
+        "enabled": false,
+        "baselineCompute": "1",
+        "exponent": "0"
+      },
+      "runtime": {},
+      "tags": ["manual", "action"]
+    },
+    {
+      "id": "antiVirus",
+      "name": "Anti-Virus Software",
+      "description": "A defense daemon that validates blocks and yields crypto over time.",
+      "kind": "passive",
+      "path": "whitehat",
+      "enabled": true,
+      "aliases": [],
+      "inputResources": {},
+      "outputResources": {
+        "crypto": "0.1"
+      },
+      "defaultMultiplierPct": "0",
+      "reputationEffect": "0",
+      "unlock": {},
+      "upgrade": {
+        "startingLevel": 1,
+        "maxLevel": 10,
+        "levelMultiplierPct": "20"
+      },
+      "computeScaling": {
+        "enabled": true,
+        "baselineCompute": "10",
+        "exponent": "0.25"
+      },
+      "runtime": {
+        "tickIntervalMs": 1000,
+        "allowAutoRun": true
+      },
+      "tags": ["background"]
+    },
+    {
+      "id": "payloadScript",
+      "name": "Payload Script",
+      "description": "A background script that mines low-yield crypto over time.",
+      "kind": "passive",
+      "path": "blackhat",
+      "enabled": true,
+      "aliases": [],
+      "inputResources": {},
+      "outputResources": {
+        "crypto": "0.1"
+      },
+      "defaultMultiplierPct": "0",
+      "reputationEffect": "0",
+      "unlock": {},
+      "upgrade": {
+        "startingLevel": 1,
+        "maxLevel": 10,
+        "levelMultiplierPct": "20"
+      },
+      "computeScaling": {
+        "enabled": true,
+        "baselineCompute": "10",
+        "exponent": "0.25"
+      },
+      "runtime": {
+        "tickIntervalMs": 1000,
+        "allowAutoRun": true
+      },
+      "tags": ["background"]
+    },
+    {
+      "id": "buildDevice",
+      "name": "Build Device",
+      "description": "Invest money and crypto to construct a device that yields double the investment.",
+      "kind": "timedTask",
+      "path": "whitehat",
+      "enabled": true,
+      "aliases": [],
+      "inputResources": {
+        "money": "10",
+        "crypto": "5"
+      },
+      "outputResources": {
+        "money": "20"
+      },
+      "defaultMultiplierPct": "0",
+      "reputationEffect": "0",
+      "unlock": {},
+      "upgrade": {
+        "startingLevel": 1,
+        "maxLevel": 5,
+        "levelMultiplierPct": "100",
+        "timedInputCostGrowthPct": "5"
+      },
+      "computeScaling": {
+        "enabled": true,
+        "baselineCompute": "10",
+        "exponent": "0.2"
+      },
+      "runtime": {
+        "durationMs": 60000,
+        "allowAutoRun": true
+      },
+      "tags": ["task"]
+    },
+    {
+      "id": "marketSkim",
+      "name": "Market Skim",
+      "description": "Run an automated skim operation to extract crypto after a timed setup window.",
+      "kind": "timedTask",
+      "path": "blackhat",
+      "enabled": true,
+      "aliases": [],
+      "inputResources": {
+        "money": "8",
+        "crypto": "2"
+      },
+      "outputResources": {
+        "crypto": "12"
+      },
+      "defaultMultiplierPct": "0",
+      "reputationEffect": "0",
+      "unlock": {},
+      "upgrade": {
+        "startingLevel": 1,
+        "maxLevel": 5,
+        "levelMultiplierPct": "70"
+      },
+      "computeScaling": {
+        "enabled": true,
+        "baselineCompute": "20",
+        "exponent": "0.2"
+      },
+      "runtime": {
+        "durationMs": 45000,
+        "allowAutoRun": true
+      },
+      "tags": ["task"]
+    }
+  ]
+}

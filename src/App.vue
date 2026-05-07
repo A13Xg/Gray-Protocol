@@ -13,6 +13,7 @@ import {
   executeManualGenerator,
   startTimedGenerator,
   upgradeGenerator,
+  setPassiveNodeEnabled,
 } from "./core/generators";
 
 onMounted(() => {
@@ -122,6 +123,17 @@ function timedInProgress(id: string): boolean {
 
 function isUnlocked(id: string): boolean {
   return GENERATORS[id]?.isUnlocked(state) ?? true;
+}
+
+function isPassiveEnabled(id: string): boolean {
+  return state.generators.passiveEnabledById[id] ?? true;
+}
+
+function onTogglePassive(id: string): void {
+  const next = !isPassiveEnabled(id);
+  if (!setPassiveNodeEnabled(state, id, next)) return;
+  const cfg = GENERATOR_CONFIGS[id];
+  lastOutcome.value = `${cfg.name} ${next ? "enabled" : "disabled"}`;
 }
 
 function runManualGenerator(id: string): void {
@@ -245,9 +257,14 @@ function onStartTimed(id: string): void {
               {{ key }}: {{ format(amt) }}/s ×Lv{{ genLevel(cfg.id) }}
             </span>
           </div>
-          <button @click="onUpgradeGenerator(cfg.id)" :disabled="genLevel(cfg.id) >= cfg.maxLevel">
-            Upgrade
-          </button>
+          <div class="controls">
+            <button @click="onTogglePassive(cfg.id)">
+              {{ isPassiveEnabled(cfg.id) ? "Disable" : "Enable" }}
+            </button>
+            <button @click="onUpgradeGenerator(cfg.id)" :disabled="genLevel(cfg.id) >= cfg.maxLevel">
+              Upgrade
+            </button>
+          </div>
         </div>
       </div>
     </section>

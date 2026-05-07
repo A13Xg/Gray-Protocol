@@ -1,41 +1,35 @@
-// src/core/actions.ts
 import Decimal from "break_eternity.js";
 import type { GameState, ActionDefinition, ActionOutcome, ManualClickAction } from "./types";
 import { GAME_CONFIG } from "./config";
-import { executeManualGenerator } from "./generators";
-import { GENERATOR_CONFIGS } from "./content/generators";
-import { upgradeGenerator, GENERATORS } from "./generators";
+import { executeManualGenerator, GENERATOR_CONFIGS, upgradeGenerator, GENERATORS } from "./generators";
 import { getManualClickMultiplierStack } from "./scaling";
+import { NODE_LIST, resolveNodeId } from "./content/nodes";
 
-export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
-  hardenComputer: {
-    id: "hardenComputer",
-    name: "Harden Computer",
-    description: "Secure a computer for a client. Earn money and improve reputation.",
-    path: "whitehat",
-    generatorId: "hardenDevice",
-    baseReward: new Decimal(GAME_CONFIG.actions.hardenComputer.baseReward),
-    reputationDelta: new Decimal(GAME_CONFIG.actions.hardenComputer.reputationDelta),
-  },
-  hackComputer: {
-    id: "hackComputer",
-    name: "Hack Computer",
-    description: "Hack a computer for quick cash at the cost of reputation.",
-    path: "blackhat",
-    generatorId: "hackDevice",
-    baseReward: new Decimal(GAME_CONFIG.actions.hackComputer.baseReward),
-    reputationDelta: new Decimal(GAME_CONFIG.actions.hackComputer.reputationDelta),
-  },
-};
+function buildActionDefinitions(): Record<string, ActionDefinition> {
+  const entries = NODE_LIST
+    .filter((node) => node.kind === "clickable" && node.enabled)
+    .flatMap((node) => {
+      const outputMoney = node.outputResources.money ?? new Decimal(0);
+      const primaryId = node.aliases[0] ?? node.id;
+      const allIds = [primaryId, ...node.aliases.slice(1)];
+      return allIds.map((alias) => [
+        alias,
+        {
+          id: alias,
+          name: node.name,
+          description: node.description,
+          path: node.path,
+          generatorId: node.id,
+          baseReward: outputMoney,
+          reputationDelta: node.reputationEffect,
+        } as ActionDefinition,
+      ] as const);
+    });
 
-const ACTION_ALIASES: Record<string, string> = {
-  pentestSystem: "hardenComputer",
-  exploitSystem: "hackComputer",
-};
-
-function resolveActionId(actionId: string): string {
-  return ACTION_ALIASES[actionId] ?? actionId;
+  return Object.fromEntries(entries) as Record<string, ActionDefinition>;
 }
+
+export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = buildActionDefinitions();
 
 function createManualClickAction(def: ActionDefinition): ManualClickAction {
   return {
@@ -48,8 +42,6 @@ function createManualClickAction(def: ActionDefinition): ManualClickAction {
     getYield(gs: GameState): Decimal {
       const config = GENERATOR_CONFIGS[def.generatorId];
       if (!config) return def.baseReward;
-      // Uses manual-only stack so current behavior is base x level while
-      // preserving extension points for later progression systems.
       const stack = getManualClickMultiplierStack(gs, config);
       return def.baseReward.mul(stack.total);
     },
@@ -76,6 +68,14 @@ function createManualClickAction(def: ActionDefinition): ManualClickAction {
 export const MANUAL_CLICK_ACTIONS: Record<string, ManualClickAction> = Object.fromEntries(
   Object.values(ACTION_DEFINITIONS).map((def) => [def.id, createManualClickAction(def)])
 ) as Record<string, ManualClickAction>;
+
+function resolveActionId(actionId: string): string {
+  const resolvedNodeId = resolveNodeId(actionId);
+  if (ACTION_DEFINITIONS[actionId]) return actionId;
+  if (!GENERATOR_CONFIGS[resolvedNodeId]) return actionId;
+  const fromNode = Object.values(ACTION_DEFINITIONS).find((a) => a.generatorId === resolvedNodeId);
+  return fromNode?.id ?? actionId;
+}
 
 export function executeAction(gs: GameState, actionId: string): ActionOutcome | null {
   const resolvedId = resolveActionId(actionId);

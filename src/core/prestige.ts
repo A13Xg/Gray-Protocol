@@ -32,6 +32,7 @@ function resetForNewRun(gs: GameState): void {
     timedProgress: {},
     passiveRemainderMs: {},
     timedAutoRunById: {},
+    passiveEnabledById: {},
   };
   resetRunTalents(gs);
   gs.timestamps.createdAt = nowMs();

@@ -1,45 +1,112 @@
 import Decimal from "break_eternity.js";
-import type { TalentNodeDefinition } from "../types";
+import talentsJson from "./talents.json";
+import type {
+  CryptoModifierEffect,
+  GeneratorModifierEffect,
+  GeneratorType,
+  ResourceKey,
+  TalentNodeDefinition,
+  TalentScope,
+} from "../types";
 
-export const TALENT_NODES: Record<string, TalentNodeDefinition> = {
-  manualProtocols: {
-    id: "manualProtocols",
-    name: "Manual Protocols",
-    description: "Improve manual execution throughput.",
-    scope: "run",
-    costs: { money: new Decimal(25) },
-    effects: {
-      generatorMultipliers: [
-        { mode: "multiplicative", value: new Decimal(0.2), generatorTypes: ["manual"] },
-      ],
-    },
-  },
-  persistentAutomation: {
-    id: "persistentAutomation",
-    name: "Persistent Automation",
-    description: "Permanent passive process tuning.",
-    scope: "permanent",
-    costs: { crypto: new Decimal(3) },
+interface RawGeneratorModifierEffect {
+  mode: "additive" | "multiplicative";
+  value: string | number;
+  generatorTypes?: GeneratorType[];
+  generatorIds?: string[];
+  paths?: Array<"whitehat" | "blackhat" | "shared">;
+  resources?: ResourceKey[];
+}
+
+interface RawCryptoModifierEffect {
+  mode: "additive" | "multiplicative";
+  value: string | number;
+}
+
+interface RawTalentNode {
+  id: string;
+  name: string;
+  description: string;
+  scope: TalentScope;
+  costs: Partial<Record<ResourceKey, string | number>>;
+  prerequisites?: {
+    allTalentNodeIds?: string[];
+    minReputation?: string | number;
+    minResources?: Partial<Record<ResourceKey, string | number>>;
+    requiredGeneratorLevels?: Record<string, number>;
+  };
+  effects: {
+    generatorMultipliers?: RawGeneratorModifierEffect[];
+    cryptoEfficiency?: RawCryptoModifierEffect;
+  };
+}
+
+interface RawTalentCatalog {
+  talents: RawTalentNode[];
+}
+
+function toDecimal(value: string | number | undefined, fallback: string): Decimal {
+  try {
+    return new Decimal(value ?? fallback);
+  } catch {
+    return new Decimal(fallback);
+  }
+}
+
+function toResourceCostMap(
+  map: Partial<Record<ResourceKey, string | number>> | undefined
+): Partial<Record<ResourceKey, Decimal>> {
+  if (!map) return {};
+  const entries = Object.entries(map).map(([key, value]) => [key, toDecimal(value, "0")]);
+  return Object.fromEntries(entries) as Partial<Record<ResourceKey, Decimal>>;
+}
+
+function parseGeneratorEffect(effect: RawGeneratorModifierEffect): GeneratorModifierEffect {
+  return {
+    mode: effect.mode,
+    value: toDecimal(effect.value, "0"),
+    generatorTypes: effect.generatorTypes,
+    generatorIds: effect.generatorIds,
+    paths: effect.paths,
+    resources: effect.resources,
+  };
+}
+
+function parseCryptoEffect(effect: RawCryptoModifierEffect): CryptoModifierEffect {
+  return {
+    mode: effect.mode,
+    value: toDecimal(effect.value, "0"),
+  };
+}
+
+function parseTalentNode(raw: RawTalentNode): TalentNodeDefinition {
+  return {
+    id: raw.id,
+    name: raw.name,
+    description: raw.description,
+    scope: raw.scope,
+    costs: toResourceCostMap(raw.costs),
     prerequisites: {
-      minReputation: new Decimal(5),
+      allTalentNodeIds: raw.prerequisites?.allTalentNodeIds,
+      minReputation:
+        raw.prerequisites?.minReputation !== undefined
+          ? toDecimal(raw.prerequisites.minReputation, "0")
+          : undefined,
+      minResources: toResourceCostMap(raw.prerequisites?.minResources),
+      requiredGeneratorLevels: raw.prerequisites?.requiredGeneratorLevels,
     },
     effects: {
-      generatorMultipliers: [
-        { mode: "multiplicative", value: new Decimal(0.15), generatorTypes: ["passive"] },
-      ],
+      generatorMultipliers: raw.effects.generatorMultipliers?.map(parseGeneratorEffect),
+      cryptoEfficiency: raw.effects.cryptoEfficiency ? parseCryptoEffect(raw.effects.cryptoEfficiency) : undefined,
     },
-  },
-  marketMakers: {
-    id: "marketMakers",
-    name: "Market Makers",
-    description: "Improves money->crypto conversion efficiency.",
-    scope: "run",
-    costs: { money: new Decimal(40), reputation: new Decimal(3) },
-    effects: {
-      cryptoEfficiency: {
-        mode: "multiplicative",
-        value: new Decimal(0.1),
-      },
-    },
-  },
-};
+  };
+}
+
+const rawCatalog = talentsJson as RawTalentCatalog;
+
+export const TALENT_NODES: Record<string, TalentNodeDefinition> = Object.fromEntries(
+  rawCatalog.talents.map((rawNode) => {
+    const parsed = parseTalentNode(rawNode);
+    return [parsed.id, parsed];
+  })
+) as Record<string, TalentNodeDefinition>;
