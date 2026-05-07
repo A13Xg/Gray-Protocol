@@ -39,6 +39,16 @@ function validateGeneratorConfig(cfg: ResourceGeneratorConfig): string[] {
     if (!isDecimalPositiveOrZero(val)) errors.push(`input resource ${key} must be finite and >= 0`);
   }
 
+  for (const [key, val] of Object.entries(cfg.upgradeCost ?? {}) as [ResourceKey, Decimal][]) {
+    if (!RESOURCE_KEYS.has(key)) errors.push(`invalid upgradeCost key: ${key}`);
+    if (!val.isFinite() || Decimal.isNaN(val) || val.lte(0)) {
+      errors.push(`upgradeCost ${key} must be > 0`);
+    }
+  }
+  if (cfg.upgradeCostScaling !== undefined && cfg.upgradeCostScaling <= 0) {
+    errors.push("upgradeCostScaling must be > 0");
+  }
+
   if (cfg.type === "passive") {
     if (!cfg.tickIntervalMs || cfg.tickIntervalMs <= 0) errors.push("passive generator must have tickIntervalMs > 0");
   }

@@ -59,19 +59,15 @@ describe("core invariants", () => {
     expect(gs.resources.reputation.gt(beforeRep)).toBe(true);
   });
 
-  it("manual click actions expose level and scale yield by level only", () => {
+  it("manual click actions scale yield by level with the full multiplier stack", () => {
     const gs = createInitialGameState();
-
-    gs.resources = {
-      ...gs.resources,
-      reputation: new Decimal(500),
-    };
-    gs.prestige.multiplier = new Decimal(99);
+    // rep=0, prestige=1 (defaults) → all bonus multipliers at neutral; yield == level
+    gs.resources = { ...gs.resources, money: new Decimal(100) };
 
     expect(getActionLevel(gs, "hardenComputer")).toBe(1);
     expect(getActionYield(gs, "hardenComputer").eq(1)).toBe(true);
 
-    expect(levelUpAction(gs, "hardenComputer")).toBe(true);
+    expect(levelUpAction(gs, "hardenComputer")).toBe(true); // costs $10
     expect(getActionLevel(gs, "hardenComputer")).toBe(2);
     expect(getActionYield(gs, "hardenComputer").eq(2)).toBe(true);
 
@@ -80,25 +76,28 @@ describe("core invariants", () => {
     expect(result?.level).toBe(2);
     expect(result?.rewardApplied.eq(2)).toBe(true);
     expect(result?.reputationDelta.eq(1)).toBe(true);
-    expect(gs.resources.money.eq(2)).toBe(true);
-    expect(gs.resources.reputation.eq(501)).toBe(true);
+    // 100 - 10 (upgrade) + 2 (action) = 92
+    expect(gs.resources.money.eq(92)).toBe(true);
+    expect(gs.resources.reputation.eq(1)).toBe(true);
   });
 
-  it("manual click multiplier stack keeps future hooks at identity", () => {
+  it("manual click multiplier stack applies full scaling including prestige and reputation path", () => {
     const gs = createInitialGameState();
-    gs.resources = {
-      ...gs.resources,
-      reputation: new Decimal(250),
-    };
+    gs.resources = { ...gs.resources, reputation: new Decimal(250) };
     gs.prestige.multiplier = new Decimal(5);
 
     const stack = getManualClickMultiplierStack(gs, GENERATORS.hardenDevice.config);
     expect(stack.base.eq(1)).toBe(true);
     expect(stack.level.eq(1)).toBe(true);
+    // No talents purchased
     expect(stack.talentUpgrade.eq(1)).toBe(true);
-    expect(stack.prestige.eq(1)).toBe(true);
-    expect(stack.reputationCompute.eq(1)).toBe(true);
-    expect(stack.total.eq(1)).toBe(true);
+    // Prestige multiplier was set to 5
+    expect(stack.prestige.eq(5)).toBe(true);
+    // whitehat at rep=250: normalized=clamp01(2.5)=1, directional=1+1×0.25=1.25
+    // manual has no computeScaling → compute=1 → reputationCompute=1.25
+    expect(stack.reputationCompute.eq(new Decimal(1.25))).toBe(true);
+    // total = 1 × 1 × 1 × 5 × 1.25 = 6.25
+    expect(stack.total.eq(new Decimal(6.25))).toBe(true);
   });
 
   it("passive generator split-step deterministic output remains equal", () => {
@@ -116,6 +115,8 @@ describe("core invariants", () => {
       compute: new Decimal(10),
       reputation: new Decimal(500),
     };
+    // Unlock both passive generators (payloadScript needs hackDevice≥2, antiVirus needs hardenDevice≥2)
+    gs.generators.levels = { hackDevice: 2, hardenDevice: 2 };
 
     tickPassiveGenerators(gs, 1000);
 
@@ -134,6 +135,8 @@ describe("core invariants", () => {
       ...gs.resources,
       compute: new Decimal(20),
     };
+    // Unlock both passive generators
+    gs.generators.levels = { hackDevice: 2, hardenDevice: 2 };
 
     tickPassiveGenerators(gs, 1000);
 
@@ -178,6 +181,8 @@ describe("core invariants", () => {
   it("timed activity cost increases slightly with level", () => {
     const gs = createInitialGameState();
     const buildDevice = GENERATORS.buildDevice.config;
+    // Provide enough resources to pay the buildDevice upgrade cost ($50 + 15 CR)
+    gs.resources = { ...gs.resources, money: new Decimal(100), crypto: new Decimal(30) };
 
     const baseCosts = getTimedActivityInputCosts(gs, buildDevice);
     expect(baseCosts.money?.eq(10)).toBe(true);
@@ -249,6 +254,8 @@ describe("core invariants", () => {
 
   it("serialized game state remains scientific notation compatible", () => {
     const gs = createInitialGameState();
+    // Provide money so the hackDevice upgrade ($10) succeeds
+    gs.resources = { ...gs.resources, money: new Decimal(100) };
     levelUpAction(gs, "hackComputer");
     executeManualGenerator(gs, "hardenDevice");
     const serialized = previewSerializedState(gs);

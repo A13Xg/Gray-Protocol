@@ -2,6 +2,7 @@ import Decimal from "break_eternity.js";
 import type { ResourceGeneratorConfig } from "../types";
 
 export const GENERATOR_CONFIGS: Record<string, ResourceGeneratorConfig> = {
+  // ── Manual ─────────────────────────────────────────────────────────────────
   hackDevice: {
     id: "hackDevice",
     name: "Hack Computer",
@@ -13,6 +14,8 @@ export const GENERATOR_CONFIGS: Record<string, ResourceGeneratorConfig> = {
     level: 1,
     maxLevel: 10,
     levelScaling: 2,
+    upgradeCost: { money: new Decimal(10) },
+    upgradeCostScaling: 2,
   },
   hardenDevice: {
     id: "hardenDevice",
@@ -25,7 +28,11 @@ export const GENERATOR_CONFIGS: Record<string, ResourceGeneratorConfig> = {
     level: 1,
     maxLevel: 10,
     levelScaling: 2,
+    upgradeCost: { money: new Decimal(10) },
+    upgradeCostScaling: 2,
   },
+
+  // ── Passive ─────────────────────────────────────────────────────────────────
   payloadScript: {
     id: "payloadScript",
     name: "Payload Script",
@@ -37,10 +44,16 @@ export const GENERATOR_CONFIGS: Record<string, ResourceGeneratorConfig> = {
     level: 1,
     maxLevel: 10,
     levelScaling: 1.2,
+    upgradeCost: { money: new Decimal(30), crypto: new Decimal(5) },
+    upgradeCostScaling: 1.8,
     computeScaling: {
       enabled: true,
       baselineCompute: new Decimal(10),
       exponent: new Decimal(0.25),
+    },
+    // Unlocks once the player has upgraded their manual hack tool at least once.
+    unlock: {
+      minGeneratorLevel: { hackDevice: 2 },
     },
   },
   antiVirus: {
@@ -54,12 +67,20 @@ export const GENERATOR_CONFIGS: Record<string, ResourceGeneratorConfig> = {
     level: 1,
     maxLevel: 10,
     levelScaling: 1.2,
+    upgradeCost: { money: new Decimal(30), crypto: new Decimal(5) },
+    upgradeCostScaling: 1.8,
     computeScaling: {
       enabled: true,
       baselineCompute: new Decimal(10),
       exponent: new Decimal(0.25),
     },
+    // Unlocks once the player has upgraded their manual harden tool at least once.
+    unlock: {
+      minGeneratorLevel: { hardenDevice: 2 },
+    },
   },
+
+  // ── Timed ───────────────────────────────────────────────────────────────────
   buildDevice: {
     id: "buildDevice",
     name: "Build Device",
@@ -72,6 +93,8 @@ export const GENERATOR_CONFIGS: Record<string, ResourceGeneratorConfig> = {
     level: 1,
     maxLevel: 5,
     levelScaling: 2.0,
+    upgradeCost: { money: new Decimal(50), crypto: new Decimal(15) },
+    upgradeCostScaling: 2.0,
     computeScaling: {
       enabled: true,
       baselineCompute: new Decimal(10),
@@ -90,6 +113,8 @@ export const GENERATOR_CONFIGS: Record<string, ResourceGeneratorConfig> = {
     level: 1,
     maxLevel: 5,
     levelScaling: 1.7,
+    upgradeCost: { money: new Decimal(40), crypto: new Decimal(10) },
+    upgradeCostScaling: 2.0,
     computeScaling: {
       enabled: true,
       baselineCompute: new Decimal(20),

@@ -76,9 +76,17 @@ export interface ResourceGeneratorConfig {
     exponent: Decimal;
   };
   reputationEffect?: Decimal;
+  /** Base cost to upgrade from level N to N+1 (at level 1). */
+  upgradeCost?: Partial<Record<ResourceKey, Decimal>>;
+  /** Multiplier applied to upgradeCost per level. Default: 1.5 */
+  upgradeCostScaling?: number;
   unlock?: {
     minReputation?: Decimal;
     maxReputation?: Decimal;
+    /** Current resource amounts required before this generator is usable. */
+    minResources?: Partial<Record<ResourceKey, Decimal>>;
+    /** Other generator levels required before this generator is usable. */
+    minGeneratorLevel?: Record<string, number>;
   };
 }
 

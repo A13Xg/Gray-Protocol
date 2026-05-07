@@ -87,6 +87,37 @@ function applyScaledOutputs(
   return { outputs, stack };
 }
 
+// ── Upgrade cost helpers ──────────────────────────────────────────────────────
+
+/**
+ * Returns the upgrade cost for the generator's CURRENT level.
+ * Cost at level N = upgradeCost * upgradeCostScaling^(N-1).
+ */
+export function getUpgradeCost(
+  gs: GameState,
+  config: ResourceGeneratorConfig
+): Partial<Record<ResourceKey, Decimal>> {
+  if (!config.upgradeCost) return {};
+  const currentLevel = gs.generators.levels[config.id] ?? config.level;
+  const scaling = new Decimal(config.upgradeCostScaling ?? 1.5);
+  const exponent = Math.max(0, currentLevel - 1);
+  const multiplier = Decimal.pow(scaling, exponent);
+  return Object.fromEntries(
+    Object.entries(config.upgradeCost).map(([k, v]) => [k, (v as Decimal).mul(multiplier)])
+  ) as Partial<Record<ResourceKey, Decimal>>;
+}
+
+/** Returns true when the player can afford the current-level upgrade cost. */
+export function canAffordUpgrade(gs: GameState, config: ResourceGeneratorConfig): boolean {
+  if (!config.upgradeCost) return true;
+  const cost = getUpgradeCost(gs, config);
+  for (const [key, amount] of Object.entries(cost) as [ResourceKey, Decimal][]) {
+    if (key === "compute") continue;
+    if (gs.resources[key].lt(amount)) return false;
+  }
+  return true;
+}
+
 export function createGeneratorInstance(config: ResourceGeneratorConfig) {
   return {
     config,
@@ -166,6 +197,15 @@ export function createGeneratorInstance(config: ResourceGeneratorConfig) {
     upgrade(gs: GameState): boolean {
       const current = gs.generators.levels[config.id] ?? config.level;
       if (current >= config.maxLevel) return false;
+      if (!canAffordUpgrade(gs, config)) return false;
+      const cost = getUpgradeCost(gs, config);
+      const next = { ...gs.resources };
+      for (const [key, amount] of Object.entries(cost) as [ResourceKey, Decimal][]) {
+        if (key !== "compute") {
+          next[key] = next[key].sub(amount);
+        }
+      }
+      gs.resources = next;
       gs.generators.levels[config.id] = current + 1;
       return true;
     },
@@ -179,6 +219,17 @@ export function createGeneratorInstance(config: ResourceGeneratorConfig) {
       if (!unlock) return true;
       if (unlock.minReputation && gs.resources.reputation.lt(unlock.minReputation)) return false;
       if (unlock.maxReputation && gs.resources.reputation.gt(unlock.maxReputation)) return false;
+      if (unlock.minResources) {
+        for (const [key, required] of Object.entries(unlock.minResources) as [ResourceKey, Decimal][]) {
+          if (gs.resources[key].lt(required)) return false;
+        }
+      }
+      if (unlock.minGeneratorLevel) {
+        for (const [genId, minLevel] of Object.entries(unlock.minGeneratorLevel)) {
+          const level = gs.generators.levels[genId] ?? GENERATOR_CONFIGS[genId]?.level ?? 1;
+          if (level < minLevel) return false;
+        }
+      }
       return true;
     },
   };

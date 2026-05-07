@@ -112,20 +112,9 @@ export function getManualClickMultiplierStack(
   reputationCompute: Decimal;
   total: Decimal;
 } {
-  const base = getBaseRewardMultiplier(config);
-  const level = getLevelMultiplier(gs, config);
-  // Manual click actions intentionally scale with level only for now.
-  // These identity factors are reserved integration hooks for future
-  // talent, prestige, reputation-path, and compute multipliers.
-  const identity = new Decimal(1);
-  const total = base.mul(level);
-
-  return {
-    base,
-    level,
-    talentUpgrade: identity,
-    prestige: identity,
-    reputationCompute: identity,
-    total,
-  };
+  // Manual generators have no computeScaling, so compute factor = 1 and
+  // reputationCompute collapses to the reputation-path multiplier only.
+  // Delegate to the shared stack so talents and prestige apply consistently.
+  const primaryResource = (Object.keys(config.outputResources)[0] as ResourceKey) ?? "money";
+  return getGeneratorMultiplierStack(gs, config, primaryResource);
 }

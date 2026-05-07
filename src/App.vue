@@ -13,6 +13,8 @@ import {
   executeManualGenerator,
   startTimedGenerator,
   upgradeGenerator,
+  getUpgradeCost,
+  canAffordUpgrade as canAffordGeneratorUpgrade,
 } from "./core/generators";
 
 onMounted(() => {
@@ -124,6 +126,50 @@ function isUnlocked(id: string): boolean {
   return GENERATORS[id]?.isUnlocked(state) ?? true;
 }
 
+/** Formatted cost string for the next upgrade, e.g. "$10" or "$30 + 5 CR". */
+function genUpgradeCost(id: string): string {
+  const cfg = GENERATOR_CONFIGS[id];
+  if (!cfg) return "";
+  if (genLevel(id) >= cfg.maxLevel) return "";
+  const cost = getUpgradeCost(state, cfg);
+  const parts: string[] = [];
+  for (const [key, amount] of Object.entries(cost) as [string, Decimal][]) {
+    const label = key === "money" ? "$" : key === "crypto" ? "CR" : key === "compute" ? "TF" : key;
+    parts.push(`${format(amount)} ${label}`);
+  }
+  return parts.join(" + ") || "Free";
+}
+
+/** True when the player can currently afford the next upgrade. */
+function genCanAffordUpgrade(id: string): boolean {
+  const cfg = GENERATOR_CONFIGS[id];
+  if (!cfg) return false;
+  return canAffordGeneratorUpgrade(state, cfg);
+}
+
+/** Human-readable unlock requirements for a locked generator. */
+function genUnlockHint(id: string): string {
+  const cfg = GENERATOR_CONFIGS[id];
+  const unlock = cfg?.unlock;
+  if (!unlock) return "";
+  const parts: string[] = [];
+  if (unlock.minReputation) parts.push(`${format(unlock.minReputation)} REP`);
+  if (unlock.maxReputation) parts.push(`rep ≤ ${format(unlock.maxReputation)}`);
+  if (unlock.minResources) {
+    for (const [key, amt] of Object.entries(unlock.minResources) as [string, Decimal][]) {
+      const label = key === "money" ? "$" : key === "crypto" ? "CR" : key === "compute" ? "TF" : key;
+      parts.push(`${format(amt)} ${label}`);
+    }
+  }
+  if (unlock.minGeneratorLevel) {
+    for (const [genId, minLvl] of Object.entries(unlock.minGeneratorLevel) as [string, number][]) {
+      const name = GENERATOR_CONFIGS[genId]?.name ?? genId;
+      parts.push(`${name} Lv ${minLvl}`);
+    }
+  }
+  return parts.join(", ");
+}
+
 function runManualGenerator(id: string): void {
   const result = executeManualGenerator(state, id);
   if (!result) return;
@@ -137,11 +183,16 @@ function runManualGenerator(id: string): void {
 }
 
 function onUpgradeGenerator(id: string): void {
-  const upgraded = upgradeGenerator(state, id);
   const cfg = GENERATOR_CONFIGS[id];
-  lastOutcome.value = upgraded
-    ? `${cfg.name} upgraded to level ${genLevel(id)}`
-    : `${cfg.name} is already at max level`;
+  const levelBefore = genLevel(id);
+  const upgraded = upgradeGenerator(state, id);
+  if (upgraded) {
+    lastOutcome.value = `${cfg.name} upgraded to Lv ${genLevel(id)}`;
+  } else if (levelBefore >= cfg.maxLevel) {
+    lastOutcome.value = `${cfg.name} is already at max level`;
+  } else {
+    lastOutcome.value = `${cfg.name}: insufficient resources (need ${genUpgradeCost(id)})`;
+  }
 }
 
 function onStartTimed(id: string): void {
@@ -216,14 +267,20 @@ function onStartTimed(id: string): void {
             <span class="level-badge">Lv {{ genLevel(cfg.id) }}/{{ cfg.maxLevel }}</span>
           </div>
           <div class="action-desc">{{ cfg.description }}</div>
-          <div class="controls">
-            <button @click="runManualGenerator(cfg.id)" :disabled="!isUnlocked(cfg.id)">
-              Run
-            </button>
-            <button @click="onUpgradeGenerator(cfg.id)" :disabled="genLevel(cfg.id) >= cfg.maxLevel">
-              Upgrade
-            </button>
-          </div>
+          <template v-if="isUnlocked(cfg.id)">
+            <div class="controls">
+              <button @click="runManualGenerator(cfg.id)">Run</button>
+              <button
+                @click="onUpgradeGenerator(cfg.id)"
+                :disabled="genLevel(cfg.id) >= cfg.maxLevel || !genCanAffordUpgrade(cfg.id)"
+              >
+                {{ genLevel(cfg.id) >= cfg.maxLevel ? 'Max Lv' : `Upgrade (${genUpgradeCost(cfg.id)})` }}
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <p class="locked-hint">🔒 Requires: {{ genUnlockHint(cfg.id) }}</p>
+          </template>
         </div>
       </div>
     </section>
@@ -245,9 +302,17 @@ function onStartTimed(id: string): void {
               {{ key }}: {{ format(amt) }}/s ×Lv{{ genLevel(cfg.id) }}
             </span>
           </div>
-          <button @click="onUpgradeGenerator(cfg.id)" :disabled="genLevel(cfg.id) >= cfg.maxLevel">
-            Upgrade
-          </button>
+          <template v-if="isUnlocked(cfg.id)">
+            <button
+              @click="onUpgradeGenerator(cfg.id)"
+              :disabled="genLevel(cfg.id) >= cfg.maxLevel || !genCanAffordUpgrade(cfg.id)"
+            >
+              {{ genLevel(cfg.id) >= cfg.maxLevel ? 'Max Lv' : `Upgrade (${genUpgradeCost(cfg.id)})` }}
+            </button>
+          </template>
+          <template v-else>
+            <p class="locked-hint">🔒 Requires: {{ genUnlockHint(cfg.id) }}</p>
+          </template>
         </div>
       </div>
     </section>
@@ -277,14 +342,22 @@ function onStartTimed(id: string): void {
             <span class="progress-label">{{ timedProgress(cfg.id).toFixed(1) }}%</span>
           </div>
           <div v-else-if="timedCompleted(cfg.id)" class="muted small">✓ Complete</div>
-          <div class="controls">
-            <button @click="onStartTimed(cfg.id)" :disabled="timedInProgress(cfg.id)">
-              {{ timedInProgress(cfg.id) ? "In Progress…" : "Start" }}
-            </button>
-            <button @click="onUpgradeGenerator(cfg.id)" :disabled="genLevel(cfg.id) >= cfg.maxLevel">
-              Upgrade
-            </button>
-          </div>
+          <template v-if="isUnlocked(cfg.id)">
+            <div class="controls">
+              <button @click="onStartTimed(cfg.id)" :disabled="timedInProgress(cfg.id)">
+                {{ timedInProgress(cfg.id) ? "In Progress…" : "Start" }}
+              </button>
+              <button
+                @click="onUpgradeGenerator(cfg.id)"
+                :disabled="genLevel(cfg.id) >= cfg.maxLevel || !genCanAffordUpgrade(cfg.id)"
+              >
+                {{ genLevel(cfg.id) >= cfg.maxLevel ? 'Max Lv' : `Upgrade (${genUpgradeCost(cfg.id)})` }}
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <p class="locked-hint">🔒 Requires: {{ genUnlockHint(cfg.id) }}</p>
+          </template>
         </div>
       </div>
     </section>
@@ -446,7 +519,8 @@ button {
   font-family: inherit;
   font-size: 12px;
 }
-button:hover { background: #1e421e; }
+button:hover:not(:disabled) { background: #1e421e; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
 .danger { border-color: #8f3d3d; background: #2e1414; color: #ffcccc; }
 
 input[type="number"] {
@@ -496,6 +570,7 @@ textarea {
 }
 .gen-info { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; }
 .gen-outputs, .gen-inputs { font-size: 11px; opacity: 0.7; margin: 3px 0; }
+.locked-hint { font-size: 11px; color: #ff9966; opacity: 0.8; margin: 6px 0 2px; }
 
 .progress-wrap {
   position: relative;
