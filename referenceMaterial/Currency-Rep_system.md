@@ -14,6 +14,7 @@ Gray Protocol v2.0.0-baseline
 6. [Crypto Conversion Market](#6-crypto-conversion-market)
 7. [Serialization & Storage](#7-serialization--storage)
 8. [Validation Rules](#8-validation-rules)
+9. [Modular JSON Node Examples](#9-modular-json-node-examples)
 
 ---
 
@@ -223,3 +224,111 @@ Enforced by `validateResourceMap()` and `validateGameState()` in `src/core/valid
 | Crypto price must be within `[minMultiplier, maxMultiplier]` | `validateCryptoPrice()` |
 
 Failed validation surfaces via `ValidationResult { valid, errors[] }` — never throws silently.
+
+---
+
+## 9. Modular JSON Node Examples
+
+The runtime now supports content-first configuration through JSON catalogs. Current files:
+
+- `src/core/content/nodeCatalog.json` for clickable/passive/timedTask nodes
+- `src/core/content/talents.json` for talent nodes
+
+### Example A: Clickable Node
+
+```json
+{
+  "id": "hardenDevice",
+  "kind": "clickable",
+  "path": "whitehat",
+  "enabled": true,
+  "aliases": ["hardenComputer", "pentestSystem"],
+  "inputResources": {},
+  "outputResources": { "money": "1" },
+  "defaultMultiplierPct": "0",
+  "reputationEffect": "1",
+  "upgrade": {
+    "startingLevel": 1,
+    "maxLevel": 10,
+    "levelMultiplierPct": "100"
+  }
+}
+```
+
+### Example B: Passive Node
+
+```json
+{
+  "id": "antiVirus",
+  "kind": "passive",
+  "path": "whitehat",
+  "enabled": true,
+  "outputResources": { "crypto": "0.1" },
+  "defaultMultiplierPct": "0",
+  "computeScaling": {
+    "enabled": true,
+    "baselineCompute": "10",
+    "exponent": "0.25"
+  },
+  "runtime": {
+    "tickIntervalMs": 1000,
+    "allowAutoRun": true
+  }
+}
+```
+
+### Example C: Timed Task Node
+
+```json
+{
+  "id": "buildDevice",
+  "kind": "timedTask",
+  "path": "whitehat",
+  "enabled": true,
+  "inputResources": { "money": "10", "crypto": "5" },
+  "outputResources": { "money": "20" },
+  "computeScaling": {
+    "enabled": true,
+    "baselineCompute": "10",
+    "exponent": "0.2"
+  },
+  "upgrade": {
+    "startingLevel": 1,
+    "maxLevel": 5,
+    "levelMultiplierPct": "100",
+    "timedInputCostGrowthPct": "5"
+  },
+  "runtime": {
+    "durationMs": 60000,
+    "allowAutoRun": true
+  }
+}
+```
+
+### Example D: Talent Node
+
+```json
+{
+  "id": "marketMakers",
+  "scope": "run",
+  "costs": {
+    "money": "40",
+    "reputation": "3"
+  },
+  "effects": {
+    "cryptoEfficiency": {
+      "mode": "multiplicative",
+      "value": "0.1"
+    }
+  }
+}
+```
+
+### Practical Notes
+
+- Keep numeric values as strings in JSON for precise Decimal parsing.
+- Use aliases on clickable nodes to preserve old action IDs while renaming internals.
+- Keep formulas simple and standard:
+  - Level output multiplier: `(1 + levelMultiplierPct/100)^(level-1)`
+  - Timed input cost multiplier: `(1 + timedInputCostGrowthPct/100)^(level-1)`
+  - Default node multiplier: `1 + defaultMultiplierPct/100`

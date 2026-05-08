@@ -9,11 +9,15 @@ import type {
 } from "./types";
 import { getGeneratorMultiplierStack, getManualClickMultiplierStack } from "./scaling";
 import { recordResourceGain } from "./progression";
-import { GENERATOR_CONFIGS } from "./content/generators";
+import { GENERATOR_CONFIGS, NODE_CONFIGS, NODE_LIST, resolveNodeId } from "./content/nodes";
 
-export { GENERATOR_CONFIGS } from "./content/generators";
+export { GENERATOR_CONFIGS } from "./content/nodes";
 
-const TIMED_ACTIVITY_LEVEL_COST_SCALING = new Decimal(1.05);
+function getNodeDefaultMultiplier(configId: string): Decimal {
+  const node = NODE_CONFIGS[configId];
+  if (!node) return new Decimal(1);
+  return new Decimal(1).add(node.defaultMultiplierPct.div(100));
+}
 
 function canAffordInputs(
   gs: GameState,
@@ -48,9 +52,12 @@ function getGeneratorLevel(gs: GameState, config: ResourceGeneratorConfig): numb
 
 export function getTimedActivityCostMultiplier(gs: GameState, config: ResourceGeneratorConfig): Decimal {
   if (config.type !== "timed") return new Decimal(1);
+  const node = NODE_CONFIGS[config.id];
+  const growthPct = node?.upgrade.timedInputCostGrowthPct ?? new Decimal(5);
   const level = getGeneratorLevel(gs, config);
   const exponent = Math.max(0, level - 1);
-  return Decimal.pow(TIMED_ACTIVITY_LEVEL_COST_SCALING, exponent);
+  const growthMultiplier = new Decimal(1).add(growthPct.div(100));
+  return Decimal.pow(growthMultiplier, exponent);
 }
 
 export function getTimedActivityInputCosts(
@@ -72,12 +79,13 @@ function applyScaledOutputs(
 ): { outputs: Partial<Record<ResourceKey, Decimal>>; stack: GeneratorExecuteResult["multiplierStack"] } {
   const next = { ...gs.resources };
   const outputs: Partial<Record<ResourceKey, Decimal>> = {};
+  const defaultNodeMultiplier = getNodeDefaultMultiplier(config.id);
   let stack: GeneratorExecuteResult["multiplierStack"];
 
   for (const [k, amount] of Object.entries(config.outputResources) as [ResourceKey, Decimal][]) {
     const multiplier = getMultiplier(gs, config, k);
     stack = stack ?? multiplier;
-    const scaled = amount.mul(multiplier.total).mul(tickCount);
+    const scaled = amount.mul(defaultNodeMultiplier).mul(multiplier.total).mul(tickCount);
     next[k] = next[k].add(scaled);
     outputs[k] = scaled;
   }
@@ -87,34 +95,36 @@ function applyScaledOutputs(
   return { outputs, stack };
 }
 
-// ── Upgrade cost helpers ──────────────────────────────────────────────────────
+function isNodeUnlocked(gs: GameState, id: string): boolean {
+  const node = NODE_CONFIGS[id];
+  if (!node || !node.enabled) return false;
+  if (node.unlock.minReputation && gs.resources.reputation.lt(node.unlock.minReputation)) return false;
+  if (node.unlock.maxReputation && gs.resources.reputation.gt(node.unlock.maxReputation)) return false;
 
-/**
- * Returns the upgrade cost for the generator's CURRENT level.
- * Cost at level N = upgradeCost * upgradeCostScaling^(N-1).
- */
-export function getUpgradeCost(
-  gs: GameState,
-  config: ResourceGeneratorConfig
-): Partial<Record<ResourceKey, Decimal>> {
-  if (!config.upgradeCost) return {};
-  const currentLevel = gs.generators.levels[config.id] ?? config.level;
-  const scaling = new Decimal(config.upgradeCostScaling ?? 1.5);
-  const exponent = Math.max(0, currentLevel - 1);
-  const multiplier = Decimal.pow(scaling, exponent);
-  return Object.fromEntries(
-    Object.entries(config.upgradeCost).map(([k, v]) => [k, (v as Decimal).mul(multiplier)])
-  ) as Partial<Record<ResourceKey, Decimal>>;
+  for (const [resource, required] of Object.entries(node.unlock.minResources ?? {}) as [ResourceKey, Decimal][]) {
+    if (gs.resources[resource].lt(required)) return false;
+  }
+
+  for (const [requiredId, requiredLevel] of Object.entries(node.unlock.requiredNodeLevels ?? {})) {
+    const level = gs.generators.levels[requiredId] ?? NODE_CONFIGS[requiredId]?.upgrade.startingLevel ?? 1;
+    if (level < requiredLevel) return false;
+  }
+
+  return true;
 }
 
-/** Returns true when the player can afford the current-level upgrade cost. */
-export function canAffordUpgrade(gs: GameState, config: ResourceGeneratorConfig): boolean {
-  if (!config.upgradeCost) return true;
-  const cost = getUpgradeCost(gs, config);
-  for (const [key, amount] of Object.entries(cost) as [ResourceKey, Decimal][]) {
-    if (key === "compute") continue;
-    if (gs.resources[key].lt(amount)) return false;
-  }
+function isPassiveEnabled(gs: GameState, id: string): boolean {
+  return gs.generators.passiveEnabledById[id] ?? true;
+}
+
+export function setPassiveNodeEnabled(gs: GameState, id: string, enabled: boolean): boolean {
+  const resolved = resolveNodeId(id);
+  const config = GENERATOR_CONFIGS[resolved];
+  if (!config || config.type !== "passive") return false;
+  gs.generators.passiveEnabledById = {
+    ...gs.generators.passiveEnabledById,
+    [resolved]: enabled,
+  };
   return true;
 }
 
@@ -197,15 +207,6 @@ export function createGeneratorInstance(config: ResourceGeneratorConfig) {
     upgrade(gs: GameState): boolean {
       const current = gs.generators.levels[config.id] ?? config.level;
       if (current >= config.maxLevel) return false;
-      if (!canAffordUpgrade(gs, config)) return false;
-      const cost = getUpgradeCost(gs, config);
-      const next = { ...gs.resources };
-      for (const [key, amount] of Object.entries(cost) as [ResourceKey, Decimal][]) {
-        if (key !== "compute") {
-          next[key] = next[key].sub(amount);
-        }
-      }
-      gs.resources = next;
       gs.generators.levels[config.id] = current + 1;
       return true;
     },
@@ -215,43 +216,25 @@ export function createGeneratorInstance(config: ResourceGeneratorConfig) {
     },
 
     isUnlocked(gs: GameState): boolean {
-      const unlock = config.unlock;
-      if (!unlock) return true;
-      if (unlock.minReputation && gs.resources.reputation.lt(unlock.minReputation)) return false;
-      if (unlock.maxReputation && gs.resources.reputation.gt(unlock.maxReputation)) return false;
-      if (unlock.minResources) {
-        for (const [key, required] of Object.entries(unlock.minResources) as [ResourceKey, Decimal][]) {
-          if (gs.resources[key].lt(required)) return false;
-        }
-      }
-      if (unlock.minGeneratorLevel) {
-        for (const [genId, minLevel] of Object.entries(unlock.minGeneratorLevel)) {
-          const level = gs.generators.levels[genId] ?? GENERATOR_CONFIGS[genId]?.level ?? 1;
-          if (level < minLevel) return false;
-        }
-      }
-      return true;
+      return isNodeUnlocked(gs, config.id);
     },
   };
 }
-
-// ── Pre-built Instances ───────────────────────────────────────────────────────
 
 export const GENERATORS = Object.fromEntries(
   Object.values(GENERATOR_CONFIGS).map((cfg) => [cfg.id, createGeneratorInstance(cfg)])
 ) as Record<string, ReturnType<typeof createGeneratorInstance>>;
 
-// ── Top-level Engine Functions ────────────────────────────────────────────────
-
 export function executeManualGenerator(gs: GameState, id: string): GeneratorExecuteResult | null {
-  const generator = GENERATORS[id];
+  const resolved = resolveNodeId(id);
+  const generator = GENERATORS[resolved];
   if (!generator || !generator.isUnlocked(gs)) return null;
   return generator.executeManual(gs);
 }
 
 export function allocatePassiveCompute(gs: GameState): Record<string, Decimal> {
   const unlockedPassive = Object.values(GENERATORS).filter(
-    (gen) => gen.config.type === "passive" && gen.isUnlocked(gs)
+    (gen) => gen.config.type === "passive" && gen.isUnlocked(gs) && isPassiveEnabled(gs, gen.config.id)
   );
   if (unlockedPassive.length === 0) return {};
 
@@ -298,12 +281,13 @@ export function allocateTimedCompute(gs: GameState): Record<string, Decimal> {
 }
 
 export function startTimedGenerator(gs: GameState, id: string): boolean {
-  const cfg = GENERATOR_CONFIGS[id];
+  const resolved = resolveNodeId(id);
+  const cfg = GENERATOR_CONFIGS[resolved];
   if (!cfg || cfg.type !== "timed") return false;
-  const generator = GENERATORS[id];
+  const generator = GENERATORS[resolved];
   if (!generator || !generator.isUnlocked(gs)) return false;
 
-  const existing = gs.generators.timedProgress[id];
+  const existing = gs.generators.timedProgress[resolved];
   if (existing && !existing.completed) return false;
   const inputCosts = getTimedActivityInputCosts(gs, cfg);
   if (!canAffordInputs(gs, cfg, inputCosts)) return false;
@@ -311,12 +295,12 @@ export function startTimedGenerator(gs: GameState, id: string): boolean {
   applyInputCosts(gs, cfg, inputCosts);
 
   const progress: TimedGeneratorProgress = {
-    generatorId: id,
+    generatorId: resolved,
     startedAt: gs.timestamps.lastTickAt,
     progressMs: 0,
     completed: false,
   };
-  gs.generators.timedProgress = { ...gs.generators.timedProgress, [id]: progress };
+  gs.generators.timedProgress = { ...gs.generators.timedProgress, [resolved]: progress };
   return true;
 }
 
@@ -358,62 +342,66 @@ export function tickTimedGenerators(gs: GameState, deltaMs: number): GeneratorEx
 }
 
 export function setTimedActivityAutoRun(gs: GameState, id: string, enabled: boolean): boolean {
-  const cfg = GENERATOR_CONFIGS[id];
+  const resolved = resolveNodeId(id);
+  const cfg = GENERATOR_CONFIGS[resolved];
   if (!cfg || cfg.type !== "timed") return false;
-  const generator = GENERATORS[id];
+  const node = NODE_CONFIGS[resolved];
+  if (!node?.runtime.allowAutoRun) return false;
+
+  const generator = GENERATORS[resolved];
   if (!generator || !generator.isUnlocked(gs)) return false;
 
   gs.generators.timedAutoRunById = {
     ...gs.generators.timedAutoRunById,
-    [id]: enabled,
+    [resolved]: enabled,
   };
 
   if (!enabled) return true;
-  if (isTimedGeneratorRunning(gs, id)) return true;
+  if (isTimedGeneratorRunning(gs, resolved)) return true;
 
-  const started = startTimedGenerator(gs, id);
+  const started = startTimedGenerator(gs, resolved);
   if (!started) {
     gs.generators.timedAutoRunById = {
       ...gs.generators.timedAutoRunById,
-      [id]: false,
+      [resolved]: false,
     };
   }
   return started;
 }
 
 export function createTimedActivityNode(id: string): TimedActivityNode | null {
-  const cfg = GENERATOR_CONFIGS[id];
+  const resolved = resolveNodeId(id);
+  const cfg = GENERATOR_CONFIGS[resolved];
   if (!cfg || cfg.type !== "timed") return null;
 
   return {
-    id,
+    id: resolved,
     start(gs: GameState): boolean {
-      return startTimedGenerator(gs, id);
+      return startTimedGenerator(gs, resolved);
     },
     setAutoRun(gs: GameState, enabled: boolean): boolean {
-      return setTimedActivityAutoRun(gs, id, enabled);
+      return setTimedActivityAutoRun(gs, resolved, enabled);
     },
     currentLevel(gs: GameState): number {
-      return GENERATORS[id]?.currentLevel(gs) ?? cfg.level;
+      return GENERATORS[resolved]?.currentLevel(gs) ?? cfg.level;
     },
     getInputCosts(gs: GameState): Partial<Record<ResourceKey, Decimal>> {
       return getTimedActivityInputCosts(gs, cfg);
     },
     isAutoRunEnabled(gs: GameState): boolean {
-      return gs.generators.timedAutoRunById[id] ?? false;
+      return gs.generators.timedAutoRunById[resolved] ?? false;
     },
     isRunning(gs: GameState): boolean {
-      return isTimedGeneratorRunning(gs, id);
+      return isTimedGeneratorRunning(gs, resolved);
     },
   };
 }
 
 export const TIMED_ACTIVITY_NODES = Object.fromEntries(
-  Object.values(GENERATOR_CONFIGS)
-    .filter((cfg) => cfg.type === "timed")
-    .map((cfg) => [cfg.id, createTimedActivityNode(cfg.id)!])
+  NODE_LIST.filter((node) => node.kind === "timedTask").map((node) => [node.id, createTimedActivityNode(node.id)!])
 ) as Record<string, TimedActivityNode>;
 
 export function upgradeGenerator(gs: GameState, id: string): boolean {
-  return GENERATORS[id]?.upgrade(gs) ?? false;
+  const resolved = resolveNodeId(id);
+  return GENERATORS[resolved]?.upgrade(gs) ?? false;
 }

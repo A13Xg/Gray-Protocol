@@ -1,0 +1,60 @@
+{
+  "nodes": [
+    {
+      "id": "hardenDevice",
+      "name": "Harden Computer",
+      "description": "Secure a computer for a client. Earn money and build reputation.",
+      "kind": "clickable",
+      "path": "whitehat",
+      "enabled": true,
+      "aliases": ["hardenComputer", "pentestSystem"],
+      "inputResources": {},
+      "outputResources": {
+        "money": "1"
+      },
+      "defaultMultiplierPct": "0",
+      "reputationEffect": "1",
+      "unlock": {},
+      "upgrade": {
+        "startingLevel": 1,
+        "maxLevel": 10,
+        "levelMultiplierPct": "100"
+      },
+      "computeScaling": {
+        "enabled": false,
+        "baselineCompute": "1",
+        "exponent": "0"
+      },
+      "runtime": {},
+      "tags": ["manual", "action"]
+    },
+    {
+      "id": "hackDevice",
+      "name": "Hack Computer",
+      "description": "Hack a computer for quick money. Damages reputation.",
+      "kind": "clickable",
+      "path": "blackhat",
+      "enabled": true,
+      "aliases": ["hackComputer", "exploitSystem"],
+      "inputResources": {},
+      "outputResources": {
+        "money": "1"
+      },
+      "defaultMultiplierPct": "0",
+      "reputationEffect": "-1",
+      "unlock": {},
+      "upgrade": {
+        "startingLevel": 1,
+        "maxLevel": 10,
+        "levelMultiplierPct": "100"
+      },
+      "computeScaling": {
+        "enabled": false,
+        "baselineCompute": "1",
+        "exponent": "0"
+      },
+      "runtime": {},
+      "tags": ["manual", "action"]
+    }
+  ]
+}

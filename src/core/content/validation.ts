@@ -1,7 +1,7 @@
 import Decimal from "break_eternity.js";
 import { ALL_RESOURCE_KEYS } from "../resources";
-import type { ResourceKey, ResourceGeneratorConfig, TalentNodeDefinition } from "../types";
-import { GENERATOR_CONFIGS } from "./generators";
+import type { NodeConfig, ResourceKey, TalentNodeDefinition } from "../types";
+import { NODE_CONFIGS } from "./nodes";
 import { TALENT_NODES } from "./talents";
 
 const RESOURCE_KEYS = new Set<ResourceKey>(ALL_RESOURCE_KEYS);
@@ -10,14 +10,24 @@ function isDecimalPositiveOrZero(v: Decimal): boolean {
   return v.isFinite() && !Decimal.isNaN(v) && v.gte(0);
 }
 
-function validateGeneratorConfig(cfg: ResourceGeneratorConfig): string[] {
+function validateNodeConfig(cfg: NodeConfig): string[] {
   const errors: string[] = [];
 
   if (cfg.id.trim().length === 0) errors.push("empty id");
   if (cfg.name.trim().length === 0) errors.push("empty name");
-  if (cfg.maxLevel < cfg.level) errors.push("maxLevel must be >= level");
-  if (cfg.level < 1) errors.push("level must be >= 1");
-  if (cfg.levelScaling <= 0) errors.push("levelScaling must be > 0");
+  if (cfg.upgrade.maxLevel < cfg.upgrade.startingLevel) errors.push("maxLevel must be >= startingLevel");
+  if (cfg.upgrade.startingLevel < 1) errors.push("startingLevel must be >= 1");
+  if (!cfg.upgrade.levelMultiplierPct.isFinite() || Decimal.isNaN(cfg.upgrade.levelMultiplierPct)) {
+    errors.push("upgrade.levelMultiplierPct must be finite");
+  }
+
+  if (!cfg.defaultMultiplierPct.isFinite() || Decimal.isNaN(cfg.defaultMultiplierPct)) {
+    errors.push("defaultMultiplierPct must be finite");
+  }
+
+  if (!cfg.reputationEffect.isFinite() || Decimal.isNaN(cfg.reputationEffect)) {
+    errors.push("reputationEffect must be finite");
+  }
 
   const outputKeys = Object.keys(cfg.outputResources) as ResourceKey[];
   if (outputKeys.length === 0) errors.push("must define at least one output resource");
@@ -39,29 +49,29 @@ function validateGeneratorConfig(cfg: ResourceGeneratorConfig): string[] {
     if (!isDecimalPositiveOrZero(val)) errors.push(`input resource ${key} must be finite and >= 0`);
   }
 
-  for (const [key, val] of Object.entries(cfg.upgradeCost ?? {}) as [ResourceKey, Decimal][]) {
-    if (!RESOURCE_KEYS.has(key)) errors.push(`invalid upgradeCost key: ${key}`);
-    if (!val.isFinite() || Decimal.isNaN(val) || val.lte(0)) {
-      errors.push(`upgradeCost ${key} must be > 0`);
+  if (cfg.kind === "passive") {
+    if (!cfg.runtime.tickIntervalMs || cfg.runtime.tickIntervalMs <= 0) {
+      errors.push("passive node must have runtime.tickIntervalMs > 0");
     }
   }
-  if (cfg.upgradeCostScaling !== undefined && cfg.upgradeCostScaling <= 0) {
-    errors.push("upgradeCostScaling must be > 0");
+  if (cfg.kind === "timedTask") {
+    if (!cfg.runtime.durationMs || cfg.runtime.durationMs <= 0) {
+      errors.push("timedTask node must have runtime.durationMs > 0");
+    }
   }
 
-  if (cfg.type === "passive") {
-    if (!cfg.tickIntervalMs || cfg.tickIntervalMs <= 0) errors.push("passive generator must have tickIntervalMs > 0");
-  }
-  if (cfg.type === "timed") {
-    if (!cfg.durationMs || cfg.durationMs <= 0) errors.push("timed generator must have durationMs > 0");
-  }
-
-  if (cfg.computeScaling?.enabled) {
+  if (cfg.computeScaling.enabled) {
     if (!isDecimalPositiveOrZero(cfg.computeScaling.baselineCompute) || cfg.computeScaling.baselineCompute.eq(0)) {
       errors.push("computeScaling.baselineCompute must be > 0");
     }
     if (!cfg.computeScaling.exponent.isFinite() || Decimal.isNaN(cfg.computeScaling.exponent)) {
       errors.push("computeScaling.exponent must be finite");
+    }
+  }
+
+  if (cfg.kind === "timedTask" && cfg.upgrade.timedInputCostGrowthPct !== undefined) {
+    if (!cfg.upgrade.timedInputCostGrowthPct.isFinite() || Decimal.isNaN(cfg.upgrade.timedInputCostGrowthPct)) {
+      errors.push("upgrade.timedInputCostGrowthPct must be finite");
     }
   }
 
@@ -128,17 +138,17 @@ function detectTalentCycles(nodes: Record<string, TalentNodeDefinition>): string
 export function validateContentDefinitions(): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
-  const generatorIds = new Set<string>();
-  for (const [key, cfg] of Object.entries(GENERATOR_CONFIGS)) {
-    if (generatorIds.has(cfg.id)) {
-      errors.push(`duplicate generator id: ${cfg.id}`);
+  const nodeIds = new Set<string>();
+  for (const [key, cfg] of Object.entries(NODE_CONFIGS)) {
+    if (nodeIds.has(cfg.id)) {
+      errors.push(`duplicate node id: ${cfg.id}`);
     }
-    generatorIds.add(cfg.id);
+    nodeIds.add(cfg.id);
     if (cfg.id !== key) {
-      errors.push(`generator key/id mismatch: key=${key}, id=${cfg.id}`);
+      errors.push(`node key/id mismatch: key=${key}, id=${cfg.id}`);
     }
-    for (const e of validateGeneratorConfig(cfg)) {
-      errors.push(`generator ${cfg.id}: ${e}`);
+    for (const e of validateNodeConfig(cfg)) {
+      errors.push(`node ${cfg.id}: ${e}`);
     }
   }
 

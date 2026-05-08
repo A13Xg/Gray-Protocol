@@ -9,6 +9,55 @@ export type ReputationAlignment = "whitehat" | "greyhat" | "blackhat";
 
 export type ActionPath = "whitehat" | "blackhat" | "shared";
 
+export type NodeKind = "clickable" | "passive" | "timedTask";
+
+export interface NodeUnlockRequirements {
+  minReputation?: Decimal;
+  maxReputation?: Decimal;
+  minResources?: Partial<Record<ResourceKey, Decimal>>;
+  requiredNodeLevels?: Record<string, number>;
+}
+
+export interface NodeUpgradeConfig {
+  startingLevel: number;
+  maxLevel: number;
+  // Per-level growth in percent. Example: 100 => x2 each level.
+  levelMultiplierPct: Decimal;
+  // Used by timed task input cost scaling.
+  timedInputCostGrowthPct?: Decimal;
+}
+
+export interface NodeComputeScaling {
+  enabled: boolean;
+  baselineCompute: Decimal;
+  exponent: Decimal;
+}
+
+export interface NodeRuntimeConfig {
+  tickIntervalMs?: number;
+  durationMs?: number;
+  allowAutoRun?: boolean;
+}
+
+export interface NodeConfig {
+  id: string;
+  name: string;
+  description: string;
+  kind: NodeKind;
+  path: ActionPath;
+  enabled: boolean;
+  aliases: string[];
+  inputResources: Partial<Record<ResourceKey, Decimal>>;
+  outputResources: Partial<Record<ResourceKey, Decimal>>;
+  defaultMultiplierPct: Decimal;
+  reputationEffect: Decimal;
+  unlock: NodeUnlockRequirements;
+  upgrade: NodeUpgradeConfig;
+  computeScaling: NodeComputeScaling;
+  runtime: NodeRuntimeConfig;
+  tags: string[];
+}
+
 export interface ActionDefinition {
   id: string;
   name: string;
@@ -116,6 +165,7 @@ export interface GeneratorState {
   timedProgress: Record<string, TimedGeneratorProgress>;
   passiveRemainderMs: Record<string, number>;
   timedAutoRunById: Record<string, boolean>;
+  passiveEnabledById: Record<string, boolean>;
 }
 
 export interface GeneratorModifierEffect {
@@ -188,6 +238,7 @@ export interface SerializedGameState {
     timedProgress: Record<string, TimedGeneratorProgress>;
     passiveRemainderMs: Record<string, number>;
     timedAutoRunById?: Record<string, boolean>;
+    passiveEnabledById?: Record<string, boolean>;
   };
   talents?: {
     runUnlockedById: Record<string, boolean>;

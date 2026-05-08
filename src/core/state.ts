@@ -22,6 +22,7 @@ export function createInitialGameState(): GameState {
       timedProgress: {},
       passiveRemainderMs: {},
       timedAutoRunById: {},
+      passiveEnabledById: {},
     },
     talents: {
       runUnlockedById: {},
