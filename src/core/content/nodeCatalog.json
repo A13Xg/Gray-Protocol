@@ -1,13 +1,13 @@
 {
   "nodes": [
     {
-      "id": "hardenDevice",
-      "name": "Harden Computer",
-      "description": "Secure a computer for a client. Earn money and build reputation.",
+      "id": "hardenSystem",
+      "name": "Harden System",
+      "description": "Secure a system for a client. Earn money and build reputation.",
       "kind": "clickable",
       "path": "whitehat",
       "enabled": true,
-      "aliases": ["hardenComputer", "pentestSystem"],
+      "aliases": ["hardenComputer", "hardenDevice", "pentestSystem"],
       "inputResources": {},
       "outputResources": {
         "money": "1"
@@ -29,13 +29,13 @@
       "tags": ["manual", "action"]
     },
     {
-      "id": "hackDevice",
-      "name": "Hack Computer",
-      "description": "Hack a computer for quick money. Damages reputation.",
+      "id": "hackSystem",
+      "name": "Hack System",
+      "description": "Hack a system for quick money. Damages reputation.",
       "kind": "clickable",
       "path": "blackhat",
       "enabled": true,
-      "aliases": ["hackComputer", "exploitSystem"],
+      "aliases": ["hackComputer", "hackDevice", "exploitSystem"],
       "inputResources": {},
       "outputResources": {
         "money": "1"

@@ -3,7 +3,6 @@ import Decimal from "break_eternity.js";
 import type { GameState } from "./types";
 import { ALL_RESOURCE_KEYS } from "./resources";
 import { isValidDecimal } from "./math";
-import { GAME_CONFIG } from "./config";
 
 export interface ValidationResult {
   valid: boolean;
@@ -54,31 +53,13 @@ export function validateGameState(gs: GameState): ValidationResult {
     errors.push("timestamps.lastTickAt is invalid");
   }
 
-  if (!isValidDecimal(gs.prestige.level)) {
-    errors.push("prestige.level is invalid");
-  }
-  if (!isValidDecimal(gs.prestige.multiplier)) {
-    errors.push("prestige.multiplier is invalid");
-  }
-
-  const cumulativeCheck = validateResourceMap(gs.prestige.cumulativeResources);
-  if (!cumulativeCheck.valid) {
-    errors.push(...cumulativeCheck.errors.map((e) => `prestige.cumulativeResources: ${e}`));
+  for (const [id, level] of Object.entries(gs.nodes.levels)) {
+    if (!Number.isFinite(level) || level < 1) {
+      errors.push(`nodes.levels.${id} is invalid`);
+    }
   }
 
   return { valid: errors.length === 0, errors };
-}
-
-export function validateCryptoPrice(price: unknown): ValidationResult {
-  const { basePrice, minMultiplier, maxMultiplier } = GAME_CONFIG.cryptoConversion;
-  if (!isValidDecimal(price)) return fail("Crypto price is not a valid Decimal");
-  const p = new Decimal(price as Decimal);
-  const minPrice = new Decimal(basePrice).mul(minMultiplier);
-  const maxPrice = new Decimal(basePrice).mul(maxMultiplier);
-  if (p.lt(minPrice) || p.gt(maxPrice)) {
-    return fail(`Crypto price ${p.toFixed(4)} is outside bounds [${minPrice}, ${maxPrice}]`);
-  }
-  return success();
 }
 
 export function validateSerializedGameState(serialized: unknown): ValidationResult {
@@ -115,50 +96,17 @@ export function validateSerializedGameState(serialized: unknown): ValidationResu
     }
   }
 
-  if (s.prestige && typeof s.prestige === "object") {
-    const prestige = s.prestige as Record<string, unknown>;
-    for (const field of ["level", "multiplier"]) {
-      const val = prestige[field];
-      if (typeof val !== "string") return fail(`prestige.${field} must be a string`);
-      if (val !== "0" && !SCIENTIFIC_OR_ZERO.test(val.trim())) {
-        return fail(`prestige.${field} is not in scientific notation`);
-      }
-    }
-
-    const cumulative = prestige.cumulativeResources as Record<string, unknown> | undefined;
-    if (!cumulative || typeof cumulative !== "object") {
-      return fail("prestige.cumulativeResources must be an object");
-    }
-    for (const key of ALL_RESOURCE_KEYS) {
-      const val = cumulative[key];
-      if (typeof val !== "string") {
-        return fail(`prestige.cumulativeResources.${key} must be a string`);
-      }
-      if (val !== "0" && !SCIENTIFIC_OR_ZERO.test(val.trim())) {
-        return fail(`prestige.cumulativeResources.${key} is not in scientific notation`);
-      }
-      try {
-        const d = new Decimal((val as string).trim());
-        if (!d.isFinite() || Decimal.isNaN(d)) {
-          return fail(`prestige.cumulativeResources.${key} is not a valid number`);
-        }
-      } catch {
-        return fail(`prestige.cumulativeResources.${key} is not parseable`);
-      }
-    }
-  }
-
-  if (s.generators && typeof s.generators === "object") {
-    const generators = s.generators as Record<string, unknown>;
-    const levels = generators.levels as Record<string, unknown> | undefined;
+  if (s.nodes && typeof s.nodes === "object") {
+    const nodes = s.nodes as Record<string, unknown>;
+    const levels = nodes.levels as Record<string, unknown> | undefined;
     if (levels && typeof levels === "object") {
       const SCIENTIFIC_OR_ZERO = /^-?(?:0|\d+(?:\.\d+)?e[+-]?\d+)$/i;
       for (const [id, value] of Object.entries(levels)) {
         if (typeof value !== "string") {
-          return fail(`generators.levels.${id} must be a string`);
+          return fail(`nodes.levels.${id} must be a string`);
         }
         if (value !== "0" && !SCIENTIFIC_OR_ZERO.test(value.trim())) {
-          return fail(`generators.levels.${id} is not in scientific notation`);
+          return fail(`nodes.levels.${id} is not in scientific notation`);
         }
       }
     }

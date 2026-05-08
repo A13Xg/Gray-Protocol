@@ -4,19 +4,18 @@ import { VERSION, GAME_CONFIG } from "./config";
 import type { GameState, SaveFile, SerializedGameState } from "./types";
 import { deserializeResourceMap, serializeResourceMap, deserializeDecimal, serializeDecimal } from "./math";
 import { repairResourceMap } from "./resources";
-import { createInitialCumulativeResources } from "./prestige";
 import { nowMs } from "./clock";
 import { migrateSaveEnvelope, migrateSerializedPayload } from "./migrations";
 
 const SAVE_KEY = "gray_protocol_save_v1";
 
-function serializeGeneratorLevels(levels: GameState["generators"]["levels"]): Record<string, string> {
+function serializeNodeLevels(levels: GameState["nodes"]["levels"]): Record<string, string> {
   return Object.fromEntries(
     Object.entries(levels).map(([id, level]) => [id, serializeDecimal(deserializeDecimal(String(level)))])
   );
 }
 
-function deserializeGeneratorLevels(levels: Record<string, string | number> | undefined): Record<string, number> {
+function deserializeNodeLevels(levels: Record<string, string | number> | undefined): Record<string, number> {
   if (!levels) return {};
   return Object.fromEntries(
     Object.entries(levels).map(([id, level]) => {
@@ -32,21 +31,8 @@ function serializeState(gs: GameState): SerializedGameState {
     version: gs.version,
     resources: serializeResourceMap(gs.resources),
     timestamps: { ...gs.timestamps, lastSavedAt: saveTime },
-    generators: {
-      levels: serializeGeneratorLevels(gs.generators.levels),
-      timedProgress: { ...gs.generators.timedProgress },
-      passiveRemainderMs: { ...gs.generators.passiveRemainderMs },
-      timedAutoRunById: { ...gs.generators.timedAutoRunById },
-      passiveEnabledById: { ...gs.generators.passiveEnabledById },
-    },
-    talents: {
-      runUnlockedById: { ...gs.talents.runUnlockedById },
-      permanentUnlockedById: { ...gs.talents.permanentUnlockedById },
-    },
-    prestige: {
-      level: serializeDecimal(gs.prestige.level),
-      multiplier: serializeDecimal(gs.prestige.multiplier),
-      cumulativeResources: serializeResourceMap(gs.prestige.cumulativeResources),
+    nodes: {
+      levels: serializeNodeLevels(gs.nodes.levels),
     },
   };
 }
@@ -60,36 +46,8 @@ function deserializeState(serialized: SerializedGameState, target: GameState): v
     lastSavedAt: serialized.timestamps?.lastSavedAt ?? currentTime,
     lastTickAt: serialized.timestamps?.lastTickAt ?? currentTime,
   };
-  if (serialized.generators) {
-    target.generators = {
-      levels: deserializeGeneratorLevels(serialized.generators.levels),
-      timedProgress: serialized.generators.timedProgress ?? {},
-      passiveRemainderMs: serialized.generators.passiveRemainderMs ?? {},
-      timedAutoRunById: serialized.generators.timedAutoRunById ?? {},
-      passiveEnabledById: serialized.generators.passiveEnabledById ?? {},
-    };
-  } else {
-    target.generators = {
-      levels: {},
-      timedProgress: {},
-      passiveRemainderMs: {},
-      timedAutoRunById: {},
-      passiveEnabledById: {},
-    };
-  }
-
-  target.talents = {
-    runUnlockedById: serialized.talents?.runUnlockedById ?? {},
-    permanentUnlockedById: serialized.talents?.permanentUnlockedById ?? {},
-  };
-
-  const defaultCumulative = createInitialCumulativeResources();
-  target.prestige = {
-    level: deserializeDecimal(serialized.prestige?.level ?? "0"),
-    multiplier: deserializeDecimal(serialized.prestige?.multiplier ?? "1"),
-    cumulativeResources: serialized.prestige?.cumulativeResources
-      ? repairResourceMap(deserializeResourceMap(serialized.prestige.cumulativeResources))
-      : defaultCumulative,
+  target.nodes = {
+    levels: deserializeNodeLevels(serialized.nodes?.levels),
   };
 }
 

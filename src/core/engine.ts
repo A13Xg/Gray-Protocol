@@ -1,7 +1,6 @@
 // src/core/engine.ts
 import { state, pushLog } from "./state";
 import type { GameState } from "./types";
-import { tickPassiveGenerators, tickTimedGenerators } from "./generators";
 
 let rafHandle = 0;
 let lastTimestamp = 0;
@@ -31,6 +30,4 @@ export function stopGameLoop(): void {
 export function tick(gs: GameState, deltaMs: number): void {
   if (deltaMs <= 0) return;
   gs.timestamps.lastTickAt += deltaMs;
-  tickPassiveGenerators(gs, deltaMs);
-  tickTimedGenerators(gs, deltaMs);
 }

@@ -4,17 +4,7 @@ import { state } from "./core/state";
 import { startGameLoop, stopGameLoop } from "./core/engine";
 import { saveGame, loadGame, exportSave, importSave, hasSavedData, forceDeleteAllSavedData } from "./core/persistence";
 import { executeAction, ACTION_DEFINITIONS, getReputationAlignment } from "./core/actions";
-import { convertMoneyToCrypto, getCryptoPrice } from "./core/crypto";
 import { format } from "./utils/formatter";
-import Decimal from "break_eternity.js";
-import {
-  GENERATOR_CONFIGS,
-  GENERATORS,
-  executeManualGenerator,
-  startTimedGenerator,
-  upgradeGenerator,
-  setPassiveNodeEnabled,
-} from "./core/generators";
 
 onMounted(() => {
   loadGame();
@@ -26,49 +16,35 @@ onUnmounted(() => {
   stopGameLoop();
 });
 
-const fmtMoney      = computed(() => format(state.resources.money));
-const fmtCrypto     = computed(() => format(state.resources.crypto));
-const fmtCompute    = computed(() => format(state.resources.compute));
+const fmtMoney = computed(() => format(state.resources.money));
 const fmtReputation = computed(() => format(state.resources.reputation));
 const assetBase = import.meta.env.BASE_URL;
 const hatLogoSrc = `${assetBase}branding/GrayProtocol-Hat.png`;
 const wordmarkSrc = `${assetBase}branding/GrayProtocol-Logo.png`;
 
 const alignment = computed(() => getReputationAlignment(state.resources.reputation));
-
-const currentPrice = computed(() => {
-  const elapsed = Date.now() - state.timestamps.createdAt;
-  return format(getCryptoPrice(elapsed), 4);
-});
-
-const lastOutcome   = ref<string>("");
-const convertAmount = ref("1");
-const importInput   = ref("");
-const debugMessage  = ref("");
+const lastOutcome = ref<string>("");
+const importInput = ref("");
+const debugMessage = ref("");
 
 function runAction(actionId: string): void {
   const outcome = executeAction(state, actionId);
   if (!outcome) return;
-  const def = ACTION_DEFINITIONS[actionId];
+  const def = ACTION_DEFINITIONS[outcome.actionId];
   const rep = outcome.reputationDelta.gte(0)
     ? `+${format(outcome.reputationDelta)} REP`
     : `${format(outcome.reputationDelta)} REP`;
-  lastOutcome.value = `${def.name}: +$${format(outcome.rewardApplied)} money  |  ${rep}`;
+  lastOutcome.value = `${def.name}: +$${format(outcome.rewardApplied)} money | ${rep}`;
 }
 
-function onConvert(): void {
-  const amount = new Decimal(Number(convertAmount.value) || 0);
-  const result = convertMoneyToCrypto(state, amount);
-  if (!result) {
-    lastOutcome.value = "Conversion failed: insufficient money or invalid amount";
-    return;
-  }
-  lastOutcome.value =
-    `Converted $${format(result.paid)} → ${format(result.received, 4)} CR  @  $${format(result.pricePerUnit, 4)}/CR`;
+function onSave(): void {
+  saveGame();
 }
 
-function onSave(): void  { saveGame(); }
-function onExport(): void { importInput.value = exportSave(); }
+function onExport(): void {
+  importInput.value = exportSave();
+}
+
 function onImport(): void {
   if (importSave(importInput.value)) {
     importInput.value = "";
@@ -80,7 +56,7 @@ function onImport(): void {
 
 function onForceDelete(): void {
   if (!window.confirm("Delete all saved data and reset?")) return;
-  if (window.prompt('Type DELETE to confirm') !== "DELETE") {
+  if (window.prompt("Type DELETE to confirm") !== "DELETE") {
     debugMessage.value = "Cancelled";
     return;
   }
@@ -88,84 +64,8 @@ function onForceDelete(): void {
   lastOutcome.value = "";
   debugMessage.value = "State reset";
 }
-
-// ── Generator helpers ─────────────────────────────────────────────────────
-
-const manualGenerators = computed(() =>
-  Object.values(GENERATOR_CONFIGS).filter((c) => c.type === "manual")
-);
-const passiveGenerators = computed(() =>
-  Object.values(GENERATOR_CONFIGS).filter((c) => c.type === "passive")
-);
-const timedGenerators = computed(() =>
-  Object.values(GENERATOR_CONFIGS).filter((c) => c.type === "timed")
-);
-
-function genLevel(id: string): number {
-  return state.generators.levels[id] ?? GENERATOR_CONFIGS[id]?.level ?? 1;
-}
-
-function timedProgress(id: string): number {
-  const p = state.generators.timedProgress[id];
-  if (!p || p.completed) return 0;
-  const duration = GENERATOR_CONFIGS[id]?.durationMs ?? 1;
-  return Math.min(100, (p.progressMs / duration) * 100);
-}
-
-function timedCompleted(id: string): boolean {
-  return state.generators.timedProgress[id]?.completed ?? false;
-}
-
-function timedInProgress(id: string): boolean {
-  const p = state.generators.timedProgress[id];
-  return !!p && !p.completed;
-}
-
-function isUnlocked(id: string): boolean {
-  return GENERATORS[id]?.isUnlocked(state) ?? true;
-}
-
-function isPassiveEnabled(id: string): boolean {
-  return state.generators.passiveEnabledById[id] ?? true;
-}
-
-function onTogglePassive(id: string): void {
-  const next = !isPassiveEnabled(id);
-  if (!setPassiveNodeEnabled(state, id, next)) return;
-  const cfg = GENERATOR_CONFIGS[id];
-  lastOutcome.value = `${cfg.name} ${next ? "enabled" : "disabled"}`;
-}
-
-function runManualGenerator(id: string): void {
-  const result = executeManualGenerator(state, id);
-  if (!result) return;
-  const cfg = GENERATOR_CONFIGS[id];
-  const moneyOut = result.outputs.money;
-  const repOut = result.reputationDelta;
-  const parts: string[] = [cfg.name];
-  if (moneyOut) parts.push(`+$${format(moneyOut)}`);
-  if (repOut && !repOut.eq(0)) parts.push(`${repOut.gte(0) ? "+" : ""}${format(repOut)} REP`);
-  lastOutcome.value = parts.join("  |  ");
-}
-
-function onUpgradeGenerator(id: string): void {
-  const upgraded = upgradeGenerator(state, id);
-  const cfg = GENERATOR_CONFIGS[id];
-  lastOutcome.value = upgraded
-    ? `${cfg.name} upgraded to level ${genLevel(id)}`
-    : `${cfg.name} is already at max level`;
-}
-
-function onStartTimed(id: string): void {
-  const started = startTimedGenerator(state, id);
-  const cfg = GENERATOR_CONFIGS[id];
-  lastOutcome.value = started
-    ? `${cfg.name} started (${((cfg.durationMs ?? 0) / 1000).toFixed(0)}s)`
-    : timedInProgress(id)
-    ? `${cfg.name} is already in progress`
-    : `${cfg.name} failed: check inputs`;
-}
 </script>
+
 <template>
   <div class="root">
     <header class="masthead card">
@@ -176,7 +76,7 @@ function onStartTimed(id: string): void {
             <h1>Gray Protocol</h1>
             <span class="version">v{{ state.version }}</span>
           </div>
-          <p class="brand-subtitle">Operator console for gray-hat protocol escalation.</p>
+          <p class="brand-subtitle">Manual Ops Build</p>
         </div>
       </div>
       <img class="brand-wordmark" :src="wordmarkSrc" alt="Gray Protocol logo" />
@@ -185,11 +85,9 @@ function onStartTimed(id: string): void {
     <section class="card">
       <h2>Resources</h2>
       <div class="row"><span>$Money</span><strong>{{ fmtMoney }}</strong></div>
-      <div class="row"><span>Crypto</span><strong>{{ fmtCrypto }} CR</strong></div>
-      <div class="row"><span>Compute</span><strong>{{ fmtCompute }} Tflops</strong></div>
       <div class="row">
         <span>Reputation</span>
-        <strong :class="alignment">{{ fmtReputation }} REP &mdash; {{ alignment }}</strong>
+        <strong :class="alignment">{{ fmtReputation }} REP - {{ alignment }}</strong>
       </div>
     </section>
 
@@ -198,123 +96,23 @@ function onStartTimed(id: string): void {
       <div class="action-grid">
         <div class="action">
           <div class="action-header">
-            <strong>Pentest System</strong>
+            <strong>Harden System</strong>
             <em class="tag whitehat">whitehat</em>
           </div>
-          <div class="action-desc">+$1 money &nbsp; +1 REP</div>
-          <button @click="runAction('pentestSystem')">Execute Pentest</button>
+          <div class="action-desc">+$1 money | +1 REP</div>
+          <button @click="runAction('hardenSystem')">Execute Harden</button>
         </div>
 
         <div class="action">
           <div class="action-header">
-            <strong>Exploit System</strong>
+            <strong>Hack System</strong>
             <em class="tag blackhat">blackhat</em>
           </div>
-          <div class="action-desc">+$1 money &nbsp; &minus;1 REP</div>
-          <button @click="runAction('exploitSystem')">Execute Exploit</button>
+          <div class="action-desc">+$1 money | -1 REP</div>
+          <button @click="runAction('hackSystem')">Execute Hack</button>
         </div>
       </div>
       <p class="outcome" v-if="lastOutcome">{{ lastOutcome }}</p>
-    </section>
-
-    <!-- ── Manual Generators ─────────────────────────────────────────── -->
-    <section class="card">
-      <h2>Manual Generators</h2>
-      <div class="action-grid">
-        <div class="action" v-for="cfg in manualGenerators" :key="cfg.id">
-          <div class="action-header">
-            <strong>{{ cfg.name }}</strong>
-            <em class="tag" :class="cfg.path">{{ cfg.path }}</em>
-            <span class="level-badge">Lv {{ genLevel(cfg.id) }}/{{ cfg.maxLevel }}</span>
-          </div>
-          <div class="action-desc">{{ cfg.description }}</div>
-          <div class="controls">
-            <button @click="runManualGenerator(cfg.id)" :disabled="!isUnlocked(cfg.id)">
-              Run
-            </button>
-            <button @click="onUpgradeGenerator(cfg.id)" :disabled="genLevel(cfg.id) >= cfg.maxLevel">
-              Upgrade
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ── Passive Generators ────────────────────────────────────────── -->
-    <section class="card">
-      <h2>Passive Generators</h2>
-      <p class="muted small">Running automatically each engine tick.</p>
-      <div class="gen-list">
-        <div class="gen-row" v-for="cfg in passiveGenerators" :key="cfg.id">
-          <div class="gen-info">
-            <strong>{{ cfg.name }}</strong>
-            <em class="tag" :class="cfg.path">{{ cfg.path }}</em>
-            <span class="level-badge">Lv {{ genLevel(cfg.id) }}/{{ cfg.maxLevel }}</span>
-          </div>
-          <div class="action-desc">{{ cfg.description }}</div>
-          <div class="gen-outputs">
-            <span v-for="(amt, key) in cfg.outputResources" :key="key">
-              {{ key }}: {{ format(amt) }}/s ×Lv{{ genLevel(cfg.id) }}
-            </span>
-          </div>
-          <div class="controls">
-            <button @click="onTogglePassive(cfg.id)">
-              {{ isPassiveEnabled(cfg.id) ? "Disable" : "Enable" }}
-            </button>
-            <button @click="onUpgradeGenerator(cfg.id)" :disabled="genLevel(cfg.id) >= cfg.maxLevel">
-              Upgrade
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ── Timed Generators ──────────────────────────────────────────── -->
-    <section class="card">
-      <h2>Timed Production</h2>
-      <div class="gen-list">
-        <div class="gen-row" v-for="cfg in timedGenerators" :key="cfg.id">
-          <div class="gen-info">
-            <strong>{{ cfg.name }}</strong>
-            <em class="tag" :class="cfg.path">{{ cfg.path }}</em>
-            <span class="level-badge">Lv {{ genLevel(cfg.id) }}/{{ cfg.maxLevel }}</span>
-          </div>
-          <div class="action-desc">{{ cfg.description }}</div>
-          <div class="gen-inputs" v-if="cfg.inputResources">
-            Cost:
-            <span v-for="(amt, key) in cfg.inputResources" :key="key">{{ key }} {{ format(amt) }} </span>
-          </div>
-          <div class="gen-outputs">
-            Yields:
-            <span v-for="(amt, key) in cfg.outputResources" :key="key">{{ key }} {{ format(amt) }} </span>
-            <span class="muted">({{ (cfg.durationMs! / 1000).toFixed(0) }}s)</span>
-          </div>
-          <div v-if="timedInProgress(cfg.id)" class="progress-wrap">
-            <div class="progress-bar" :style="{ width: timedProgress(cfg.id) + '%' }"></div>
-            <span class="progress-label">{{ timedProgress(cfg.id).toFixed(1) }}%</span>
-          </div>
-          <div v-else-if="timedCompleted(cfg.id)" class="muted small">✓ Complete</div>
-          <div class="controls">
-            <button @click="onStartTimed(cfg.id)" :disabled="timedInProgress(cfg.id)">
-              {{ timedInProgress(cfg.id) ? "In Progress…" : "Start" }}
-            </button>
-            <button @click="onUpgradeGenerator(cfg.id)" :disabled="genLevel(cfg.id) >= cfg.maxLevel">
-              Upgrade
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Crypto Market</h2>
-      <div class="row"><span>Current Price</span><strong>${{ currentPrice }} / CR</strong></div>
-      <div class="controls">
-        <label>$Money to convert</label>
-        <input v-model="convertAmount" type="number" min="0.01" step="1" />
-        <button @click="onConvert">Buy Crypto</button>
-      </div>
-      <p class="muted small">Price oscillates every 60&nbsp;s&nbsp;&bull;&nbsp;Range: $0.10&ndash;$10.00 / CR</p>
     </section>
 
     <section class="card">
@@ -343,7 +141,7 @@ function onStartTimed(id: string): void {
           <div class="row"><span>Session start</span><strong>{{ new Date(state.timestamps.createdAt).toLocaleString() }}</strong></div>
           <div class="row"><span>Last saved</span><strong>{{ new Date(state.timestamps.lastSavedAt).toLocaleString() }}</strong></div>
         </div>
-        <div class="controls" style="margin-top:8px">
+        <div class="controls" style="margin-top: 8px">
           <button class="danger" @click="onForceDelete">Force Delete All Data</button>
         </div>
         <p v-if="debugMessage" class="muted">{{ debugMessage }}</p>
@@ -422,7 +220,7 @@ h2 { margin: 0 0 10px; font-size: 14px; letter-spacing: 0.04em; }
 }
 
 .whitehat { color: #88ff88; }
-.greyhat  { color: #d8f5d8; }
+.greyhat { color: #d8f5d8; }
 .blackhat { color: #ff8888; }
 
 .action-grid { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -466,16 +264,6 @@ button {
 button:hover { background: #1e421e; }
 .danger { border-color: #8f3d3d; background: #2e1414; color: #ffcccc; }
 
-input[type="number"] {
-  width: 80px;
-  border: 1px solid #3e6a3e;
-  background: #111;
-  color: #d8f5d8;
-  padding: 4px 6px;
-  font-family: inherit;
-  font-size: 12px;
-}
-
 textarea {
   width: 100%;
   box-sizing: border-box;
@@ -494,47 +282,8 @@ textarea {
 }
 
 .muted { opacity: 0.6; }
-.small { font-size: 11px; margin-top: 4px; }
 .outcome { font-size: 12px; opacity: 0.8; margin: 6px 0 0; }
-
 .debug-toggle { cursor: pointer; font-size: 13px; opacity: 0.7; }
-
-.level-badge {
-  font-size: 10px;
-  opacity: 0.6;
-  margin-left: auto;
-}
-
-.gen-list { display: flex; flex-direction: column; gap: 10px; }
-.gen-row {
-  border: 1px solid #243624;
-  padding: 8px 10px;
-  font-size: 13px;
-}
-.gen-info { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; }
-.gen-outputs, .gen-inputs { font-size: 11px; opacity: 0.7; margin: 3px 0; }
-
-.progress-wrap {
-  position: relative;
-  height: 14px;
-  background: #1a2a1a;
-  border: 1px solid #2e4a2e;
-  margin: 6px 0 4px;
-}
-.progress-bar {
-  height: 100%;
-  background: #3a7a3a;
-  transition: width 0.2s linear;
-}
-.progress-label {
-  position: absolute;
-  top: 0;
-  left: 4px;
-  font-size: 10px;
-  line-height: 14px;
-  color: #d8f5d8;
-}
-.debug-grid { margin: 8px 0; }
 
 @media (max-width: 640px) {
   .masthead {

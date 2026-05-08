@@ -1,12 +1,6 @@
 import Decimal from "break_eternity.js";
 import nodeCatalog from "./nodeCatalog.json";
-import type {
-  ActionPath,
-  NodeConfig,
-  NodeKind,
-  ResourceGeneratorConfig,
-  ResourceKey,
-} from "../types";
+import type { ActionPath, NodeConfig, NodeKind, ResourceKey } from "../types";
 
 interface RawNodeConfig {
   id: string;
@@ -107,43 +101,6 @@ function parseNode(raw: RawNodeConfig): NodeConfig {
   };
 }
 
-function toGeneratorType(kind: NodeKind): ResourceGeneratorConfig["type"] {
-  if (kind === "clickable") return "manual";
-  if (kind === "passive") return "passive";
-  return "timed";
-}
-
-function pctToMultiplier(pct: Decimal): number {
-  return new Decimal(1).add(pct.div(100)).toNumber();
-}
-
-function toLegacyGeneratorConfig(node: NodeConfig): ResourceGeneratorConfig {
-  return {
-    id: node.id,
-    name: node.name,
-    description: node.description,
-    type: toGeneratorType(node.kind),
-    path: node.path,
-    inputResources: node.inputResources,
-    outputResources: node.outputResources,
-    tickIntervalMs: node.runtime.tickIntervalMs,
-    durationMs: node.runtime.durationMs,
-    level: node.upgrade.startingLevel,
-    maxLevel: node.upgrade.maxLevel,
-    levelScaling: pctToMultiplier(node.upgrade.levelMultiplierPct),
-    computeScaling: {
-      enabled: node.computeScaling.enabled,
-      baselineCompute: node.computeScaling.baselineCompute,
-      exponent: node.computeScaling.exponent,
-    },
-    reputationEffect: node.reputationEffect,
-    unlock: {
-      minReputation: node.unlock.minReputation,
-      maxReputation: node.unlock.maxReputation,
-    },
-  };
-}
-
 const rawCatalog = nodeCatalog as RawCatalog;
 
 export const NODE_CONFIGS: Record<string, NodeConfig> = Object.fromEntries(
@@ -162,7 +119,3 @@ export const NODE_ALIASES: Record<string, string> = Object.fromEntries(
 export function resolveNodeId(idOrAlias: string): string {
   return NODE_CONFIGS[idOrAlias] ? idOrAlias : (NODE_ALIASES[idOrAlias] ?? idOrAlias);
 }
-
-export const GENERATOR_CONFIGS: Record<string, ResourceGeneratorConfig> = Object.fromEntries(
-  NODE_LIST.map((node) => [node.id, toLegacyGeneratorConfig(node)])
-) as Record<string, ResourceGeneratorConfig>;

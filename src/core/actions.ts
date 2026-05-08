@@ -1,21 +1,18 @@
 import Decimal from "break_eternity.js";
-import type { GameState, ActionDefinition, ActionOutcome, ManualClickAction } from "./types";
+import type { GameState, ActionDefinition, ActionOutcome } from "./types";
 import { GAME_CONFIG } from "./config";
-import { executeManualGenerator, GENERATOR_CONFIGS, upgradeGenerator, GENERATORS } from "./generators";
-import { getManualClickMultiplierStack } from "./scaling";
-import { NODE_LIST, resolveNodeId } from "./content/nodes";
+import { NODE_CONFIGS, NODE_LIST, resolveNodeId } from "./content/nodes";
 
 function buildActionDefinitions(): Record<string, ActionDefinition> {
   const entries = NODE_LIST
     .filter((node) => node.kind === "clickable" && node.enabled)
     .flatMap((node) => {
       const outputMoney = node.outputResources.money ?? new Decimal(0);
-      const primaryId = node.aliases[0] ?? node.id;
-      const allIds = [primaryId, ...node.aliases.slice(1)];
-      return allIds.map((alias) => [
-        alias,
+      const ids = [node.id, ...node.aliases];
+      return ids.map((id) => [
+        id,
         {
-          id: alias,
+          id,
           name: node.name,
           description: node.description,
           path: node.path,
@@ -31,72 +28,73 @@ function buildActionDefinitions(): Record<string, ActionDefinition> {
 
 export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = buildActionDefinitions();
 
-function createManualClickAction(def: ActionDefinition): ManualClickAction {
-  return {
-    definition: def,
-
-    currentLevel(gs: GameState): number {
-      return GENERATORS[def.generatorId]?.currentLevel(gs) ?? GENERATOR_CONFIGS[def.generatorId]?.level ?? 1;
-    },
-
-    getYield(gs: GameState): Decimal {
-      const config = GENERATOR_CONFIGS[def.generatorId];
-      if (!config) return def.baseReward;
-      const stack = getManualClickMultiplierStack(gs, config);
-      return def.baseReward.mul(stack.total);
-    },
-
-    execute(gs: GameState): ActionOutcome | null {
-      const result = executeManualGenerator(gs, def.generatorId);
-      if (!result) return null;
-
-      return {
-        actionId: def.id,
-        generatorId: def.generatorId,
-        level: this.currentLevel(gs),
-        rewardApplied: result.outputs.money ?? new Decimal(0),
-        reputationDelta: result.reputationDelta ?? new Decimal(0),
-      };
-    },
-
-    levelUp(gs: GameState): boolean {
-      return upgradeGenerator(gs, def.generatorId);
-    },
-  };
+function getNodeLevel(gs: GameState, nodeId: string): number {
+  const node = NODE_CONFIGS[nodeId];
+  if (!node) return 1;
+  return gs.nodes.levels[nodeId] ?? node.upgrade.startingLevel;
 }
 
-export const MANUAL_CLICK_ACTIONS: Record<string, ManualClickAction> = Object.fromEntries(
-  Object.values(ACTION_DEFINITIONS).map((def) => [def.id, createManualClickAction(def)])
-) as Record<string, ManualClickAction>;
+function getLevelMultiplier(gs: GameState, nodeId: string): Decimal {
+  const node = NODE_CONFIGS[nodeId];
+  if (!node) return new Decimal(1);
+  const level = getNodeLevel(gs, nodeId);
+  const exponent = Math.max(0, level - node.upgrade.startingLevel);
+  return Decimal.pow(new Decimal(1).add(node.upgrade.levelMultiplierPct.div(100)), exponent);
+}
+
+function getDefaultMultiplier(nodeId: string): Decimal {
+  const node = NODE_CONFIGS[nodeId];
+  if (!node) return new Decimal(1);
+  return new Decimal(1).add(node.defaultMultiplierPct.div(100));
+}
 
 function resolveActionId(actionId: string): string {
-  const resolvedNodeId = resolveNodeId(actionId);
   if (ACTION_DEFINITIONS[actionId]) return actionId;
-  if (!GENERATOR_CONFIGS[resolvedNodeId]) return actionId;
-  const fromNode = Object.values(ACTION_DEFINITIONS).find((a) => a.generatorId === resolvedNodeId);
-  return fromNode?.id ?? actionId;
+  const resolvedNodeId = resolveNodeId(actionId);
+  return ACTION_DEFINITIONS[resolvedNodeId] ? resolvedNodeId : actionId;
 }
 
 export function executeAction(gs: GameState, actionId: string): ActionOutcome | null {
   const resolvedId = resolveActionId(actionId);
-  const action = MANUAL_CLICK_ACTIONS[resolvedId];
+  const action = ACTION_DEFINITIONS[resolvedId];
   if (!action) return null;
-  return action.execute(gs);
+
+  const nodeId = action.generatorId;
+  const multiplier = getLevelMultiplier(gs, nodeId).mul(getDefaultMultiplier(nodeId));
+  const outputs = Object.fromEntries(
+    Object.entries(NODE_CONFIGS[nodeId].outputResources).map(([resource, amount]) => [resource, amount.mul(multiplier)])
+  ) as Record<string, Decimal>;
+
+  gs.resources = {
+    ...gs.resources,
+    money: gs.resources.money.add(outputs.money ?? new Decimal(0)),
+    reputation: gs.resources.reputation.add(action.reputationDelta),
+  };
+
+  return {
+    actionId: nodeId,
+    generatorId: nodeId,
+    level: getNodeLevel(gs, nodeId),
+    rewardApplied: outputs.money ?? new Decimal(0),
+    reputationDelta: action.reputationDelta,
+  };
 }
 
 export function getActionLevel(gs: GameState, actionId: string): number {
   const resolvedId = resolveActionId(actionId);
-  return MANUAL_CLICK_ACTIONS[resolvedId]?.currentLevel(gs) ?? 0;
+  const action = ACTION_DEFINITIONS[resolvedId];
+  return action ? getNodeLevel(gs, action.generatorId) : 0;
 }
 
 export function getActionYield(gs: GameState, actionId: string): Decimal {
   const resolvedId = resolveActionId(actionId);
-  return MANUAL_CLICK_ACTIONS[resolvedId]?.getYield(gs) ?? new Decimal(0);
+  const action = ACTION_DEFINITIONS[resolvedId];
+  if (!action) return new Decimal(0);
+  return action.baseReward.mul(getLevelMultiplier(gs, action.generatorId)).mul(getDefaultMultiplier(action.generatorId));
 }
 
-export function levelUpAction(gs: GameState, actionId: string): boolean {
-  const resolvedId = resolveActionId(actionId);
-  return MANUAL_CLICK_ACTIONS[resolvedId]?.levelUp(gs) ?? false;
+export function levelUpAction(_gs: GameState, _actionId: string): boolean {
+  return false;
 }
 
 export function getReputationAlignment(rep: Decimal): "whitehat" | "greyhat" | "blackhat" {

@@ -1,8 +1,7 @@
 import Decimal from "break_eternity.js";
 import { ALL_RESOURCE_KEYS } from "../resources";
-import type { NodeConfig, ResourceKey, TalentNodeDefinition } from "../types";
+import type { NodeConfig, ResourceKey } from "../types";
 import { NODE_CONFIGS } from "./nodes";
-import { TALENT_NODES } from "./talents";
 
 const RESOURCE_KEYS = new Set<ResourceKey>(ALL_RESOURCE_KEYS);
 
@@ -78,63 +77,6 @@ function validateNodeConfig(cfg: NodeConfig): string[] {
   return errors;
 }
 
-function validateTalentNode(node: TalentNodeDefinition, allIds: Set<string>): string[] {
-  const errors: string[] = [];
-
-  if (node.id.trim().length === 0) errors.push("empty id");
-  if (node.name.trim().length === 0) errors.push("empty name");
-
-  for (const [key, val] of Object.entries(node.costs) as [ResourceKey, Decimal][]) {
-    if (!RESOURCE_KEYS.has(key)) errors.push(`invalid cost resource key: ${key}`);
-    if (!isDecimalPositiveOrZero(val)) errors.push(`cost ${key} must be finite and >= 0`);
-  }
-
-  const prereqIds = node.prerequisites?.allTalentNodeIds ?? [];
-  for (const id of prereqIds) {
-    if (!allIds.has(id)) errors.push(`missing prerequisite node id: ${id}`);
-  }
-
-  for (const effect of node.effects.generatorMultipliers ?? []) {
-    if (!effect.value.isFinite() || Decimal.isNaN(effect.value)) {
-      errors.push("generator multiplier value must be finite");
-    }
-  }
-
-  if (node.effects.cryptoEfficiency) {
-    const value = node.effects.cryptoEfficiency.value;
-    if (!value.isFinite() || Decimal.isNaN(value)) {
-      errors.push("crypto efficiency value must be finite");
-    }
-  }
-
-  return errors;
-}
-
-function detectTalentCycles(nodes: Record<string, TalentNodeDefinition>): string[] {
-  const errors: string[] = [];
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
-
-  function dfs(id: string, stack: string[]): void {
-    if (visited.has(id)) return;
-    if (visiting.has(id)) {
-      errors.push(`talent prerequisite cycle: ${[...stack, id].join(" -> ")}`);
-      return;
-    }
-    visiting.add(id);
-    const node = nodes[id];
-    if (!node) return;
-    for (const dep of node.prerequisites?.allTalentNodeIds ?? []) {
-      dfs(dep, [...stack, id]);
-    }
-    visiting.delete(id);
-    visited.add(id);
-  }
-
-  for (const id of Object.keys(nodes)) dfs(id, []);
-  return errors;
-}
-
 export function validateContentDefinitions(): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
@@ -151,18 +93,6 @@ export function validateContentDefinitions(): { valid: boolean; errors: string[]
       errors.push(`node ${cfg.id}: ${e}`);
     }
   }
-
-  const talentIds = new Set(Object.keys(TALENT_NODES));
-  for (const [key, node] of Object.entries(TALENT_NODES)) {
-    if (node.id !== key) {
-      errors.push(`talent key/id mismatch: key=${key}, id=${node.id}`);
-    }
-    for (const e of validateTalentNode(node, talentIds)) {
-      errors.push(`talent ${node.id}: ${e}`);
-    }
-  }
-
-  errors.push(...detectTalentCycles(TALENT_NODES));
 
   return { valid: errors.length === 0, errors };
 }
